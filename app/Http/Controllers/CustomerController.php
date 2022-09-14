@@ -136,7 +136,7 @@ class CustomerController extends Controller
     //get customer by id
     public function get_customer_by_id(Request $request)
     {
-        $customer = Customer::with('details', 'opening_balance')->find(decrypt($request->input('customer')));
+        $customer = Customer::with('details', 'opening_balance')->find(decrypt($request->input('customer')))->makeVisible('customer_id');
         return response()->json([
             'auth' => true,
             'data' => $customer,

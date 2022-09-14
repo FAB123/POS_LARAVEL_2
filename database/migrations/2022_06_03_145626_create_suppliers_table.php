@@ -19,7 +19,7 @@ class CreateSuppliersTable extends Migration
             $table->string('mobile', 255)->nullable();
             $table->string('email', 255)->nullable();
             $table->string('contact_person', 100)->nullable();
-            $table->integer('vat_number')->nullable();
+            $table->string('vat_number', 20)->nullable();
             $table->integer('payment_type')->nullable();
             $table->boolean('taxable')->default(1)->comment('1 : Active, 0: Disabled');
             $table->boolean('status')->default(1)->comment('1 : Active, 0: Disabled');

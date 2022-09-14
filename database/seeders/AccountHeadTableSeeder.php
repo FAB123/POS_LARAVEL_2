@@ -67,6 +67,27 @@ class AccountHeadTableSeeder extends Seeder
             ],
             [
                 'account_id' => '202',
+                'account_name' => 'NCB BANK',
+                'account_type' => 1,
+                'editable' => 0,
+                'inserted_by' => 1,
+            ],
+            [
+                'account_id' => '203',
+                'account_name' => 'AL AHLI BANK',
+                'account_type' => 1,
+                'editable' => 0,
+                'inserted_by' => 1,
+            ],
+            [
+                'account_id' => '204',
+                'account_name' => 'Cash in bank',
+                'account_type' => 1,
+                'editable' => 0,
+                'inserted_by' => 1,
+            ],
+            [
+                'account_id' => '221',
                 'account_name' => 'Cash in Hand',
                 'account_type' => 1,
                 'editable' => 0,
@@ -86,13 +107,7 @@ class AccountHeadTableSeeder extends Seeder
                 'editable' => 0,
                 'inserted_by' => 1,
             ],
-            [
-                'account_id' => '221',
-                'account_name' => 'Cash in bank',
-                'account_type' => 1,
-                'editable' => 0,
-                'inserted_by' => 1,
-            ],
+
             [
                 'account_id' => '231',
                 'account_name' => 'Advance to Vendor',

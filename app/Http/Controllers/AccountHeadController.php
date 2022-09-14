@@ -33,8 +33,19 @@ class AccountHeadController extends Controller
     public function get_all_account_head_list()
     {
         $head_list = DB::table('account_heads')
-            ->select('account_name as name', 'account_id as id')
+            ->select('account_name as name', 'account_id as value')
             ->where('account_id', '>', 8)
+            ->get();
+        return response()->json([
+            'data' => $head_list,
+        ], 200);
+    }
+
+    public function get_all_account_payment_head_list()
+    {
+        $head_list = DB::table('account_heads')
+            ->select('account_name as label', 'account_id as value')
+            ->whereBetween('account_id', [201, 210])
             ->get();
         return response()->json([
             'data' => $head_list,

@@ -214,23 +214,28 @@ class ItemController extends Controller
     {
         // $query = Item::query();
         $keyword = $request->input('query');
-        $item = Item::where("barcode", $keyword)->with('vat_list')->first();
+        $item = Item::where("barcode", $keyword)->orWhere("item_id", $keyword)->with('vat_list')->first();
         if ($item) {
             $item->makeVisible('item_id');
             $item->makeHidden('encrypted_item');
             $item['item_quantity'] = ItemsQuantity::select('quantity')->where('location_id', $request->header('Store'))->find($item->item_id)->quantity;
-        } else {
-            $item = Item::where("item_id", $keyword)->with('vat_list')->first();
-            if ($item) {
-                $item->makeVisible('item_id');
-                $item->makeHidden('encrypted_item');
-                $item['item_quantity'] = ItemsQuantity::select('quantity')->where('location_id', $request->header('Store'))->find($item->item_id)->quantity;
-            } else {
-                return response()->json([
-                    'data' => null,
-                ], 200);
-            }
         }
+        // if ($item) {
+        //     $item->makeVisible('item_id');
+        //     $item->makeHidden('encrypted_item');
+        //     $item['item_quantity'] = ItemsQuantity::select('quantity')->where('location_id', $request->header('Store'))->find($item->item_id)->quantity;
+        // } else {
+        //     $item = Item::where("item_id", $keyword)->with('vat_list')->first();
+        //     if ($item) {
+        //         $item->makeVisible('item_id');
+        //         $item->makeHidden('encrypted_item');
+        //         $item['item_quantity'] = ItemsQuantity::select('quantity')->where('location_id', $request->header('Store'))->find($item->item_id)->quantity;
+        //     } else {
+        //         return response()->json([
+        //             'data' => null,
+        //         ], 200);
+        //     }
+        // }
 
         return response()->json([
             'data' => $item,

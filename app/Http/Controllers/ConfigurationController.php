@@ -7,6 +7,7 @@ use App\Models\Configurations\DinnerTable;
 use App\Models\Configurations\StockLocation;
 use App\Models\Configurations\StoreUnit;
 use App\Models\Configurations\TaxScheme;
+use App\Models\PaymentOption;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -321,6 +322,85 @@ class ConfigurationController extends Controller
             return response()->json([
                 'error' => true,
                 'message' => "unit.error_new_or_update",
+                'info' => $e->getMessage(),
+            ], 200);
+        }
+    }
+
+    //store payments  methods
+    //get all payments
+    public function get_all_payments()
+    {
+        $payments = PaymentOption::all('payment_id', 'payment_name_en', 'payment_name_ar', 'account_id', 'editable', 'active');
+        return response()->json([
+            'data' => $payments,
+        ], 200);
+    }
+
+    //get all payments
+    public function get_all_active_payments()
+    {
+        $payments = PaymentOption::where('active', 1)->get();
+        return response()->json([
+            'data' => $payments,
+        ], 200);
+    }
+
+    public function get_payment_option_by_id(Request $request)
+    {
+        $option = PaymentOption::find($request->input('payment_id'));
+        return response()->json([
+            'data' => $option,
+        ], 200);
+    }
+
+    public function change_payment_option_status_by_id(Request $request)
+    {
+        try {
+            DB::table('payment_options')
+                ->where('payment_id', $request->input('payment_id'))
+                ->update(['active' => $request->input('status')]);
+
+            $payments = PaymentOption::all('payment_id', 'payment_name_en', 'payment_name_ar', 'account_id', 'editable', 'active');
+
+            return response()->json([
+                'data' => $payments,
+                'status' => true,
+                'message' => "configuration.new_payment_option_or_update",
+            ], 200);
+        } catch (\Exception$e) {
+            return response()->json([
+                'status' => false,
+                'message' => "configuration.error_new_payment_option_or_update",
+                'info' => $e->getMessage(),
+            ], 200);
+        }
+    }
+
+    //save or update payment option
+    public function save_payment_option(Request $request)
+    {
+        try {
+            PaymentOption::updateOrCreate([
+                'payment_id' => $request->input('payment_id'),
+            ],
+                [
+                    'payment_name_en' => $request->input('payment_name_en'),
+                    'payment_name_ar' => $request->input('payment_name_ar'),
+                    'account_id' => $request->input('account_id'),
+                ]);
+
+            $payments = PaymentOption::all('payment_id', 'payment_name_en', 'payment_name_ar', 'account_id', 'editable', 'active');
+
+            return response()->json([
+                'stores' => $payments,
+                'error' => false,
+                'message' => "configuration.new_payment_option_or_update",
+            ], 200);
+        } catch (\Exception$e) {
+            return response()->json([
+                'error' => true,
+                'message' => "configuration.error_new_payment_option_or_update",
                 'info' => $e->getMessage(),
             ], 200);
         }

@@ -52,6 +52,27 @@ class OpeningBalanceTableSeeder extends Seeder
             ],
             [
                 'inserted_by' => 1,
+                'account_id' => 202,
+                'account_sub_id' => 0,
+                'amount' => 0.00,
+                'year' => date('Y'),
+            ],
+            [
+                'inserted_by' => 1,
+                'account_id' => 203,
+                'account_sub_id' => 0,
+                'amount' => 0.00,
+                'year' => date('Y'),
+            ],
+            [
+                'inserted_by' => 1,
+                'account_id' => 204,
+                'account_sub_id' => 0,
+                'amount' => 0.00,
+                'year' => date('Y'),
+            ],
+            [
+                'inserted_by' => 1,
                 'account_id' => 211,
                 'account_sub_id' => 0,
                 'amount' => 0.00,

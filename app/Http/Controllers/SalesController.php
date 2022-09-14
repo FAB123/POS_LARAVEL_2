@@ -27,7 +27,7 @@ class SalesController extends Controller
         $customer_info = $request->input('customerInfo');
         $payment_info = $request->input('paymentInfo');
 
-        $customer_id = $customer_info ? $customer_info["details"]["customer_id"] : null;
+        $customer_id = $customer_info ? $customer_info["customer_id"] : null;
 
         try {
             $sales = Sale::create([
@@ -293,6 +293,21 @@ class SalesController extends Controller
                 'amount' => $total_cost_price,
             ],
         ];
+
+        if ($sale_type == 'CASR' || $sale_type == 'CAS') {
+            if (count($payment_info['payment']) > 0) {
+                //validate total payment is equal to toatl cart
+                foreach ($payment_info['payment'] as $payment) {
+                    $ledger_data[] = [
+                        'transaction_id' => $transaction->transaction_id,
+                        'account_id' => $payment['type'],
+                        'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                        'amount' => $payment['amount'],
+                    ];
+                }
+            }
+        }
+
         $success = false;
         foreach ($ledger_data as $ledger) {
             $success = AccountLedgerEntry::insert($ledger);

@@ -140,6 +140,14 @@ Route::group(['namespace' => 'App\Http\Controllers'], function () {
                 Route::get('get_unit_by_id', "ConfigurationController@get_unit_by_id");
                 Route::get('delete_unit_by_id', "ConfigurationController@delete_unit_by_id");
                 Route::post('save_unit', "ConfigurationController@save_unit");
+
+                //payments
+                Route::get('get_all_payments', "ConfigurationController@get_all_payments");
+                Route::get('get_all_active_payments', "ConfigurationController@get_all_active_payments");
+
+                Route::get('get_payment_option_by_id', "ConfigurationController@get_payment_option_by_id");
+                Route::post('change_payment_option_status_by_id', "ConfigurationController@change_payment_option_status_by_id");
+                Route::post('save_payment_option', "ConfigurationController@save_payment_option");
             });
 
             //accounts routes
@@ -147,6 +155,7 @@ Route::group(['namespace' => 'App\Http\Controllers'], function () {
                 //Head Section
                 Route::get("get_all_account_heads", "AccountHeadController@get_all_account_heads");
                 Route::get("get_all_account_head_list", "AccountHeadController@get_all_account_head_list");
+                Route::get("get_all_account_payment_head_list", "AccountHeadController@get_all_account_payment_head_list");
                 Route::get("delete_account_head", "AccountHeadController@delete_account_head");
                 Route::post("update_account_heads", "AccountHeadController@update_account_heads");
                 Route::get("validate_account_head", "AccountHeadController@validate_account_head");
