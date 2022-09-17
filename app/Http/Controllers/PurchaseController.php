@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Account\AccountLedgerEntry;
+use App\Models\Account\AccountsTransaction;
+use App\Models\Account\AccountVoucher;
 use App\Models\Configurations\Configuration;
 use App\Models\Inventory;
 use App\Models\Item\Item;
@@ -24,6 +27,7 @@ class PurchaseController extends Controller
         $cart_items = $request->input('cartItems');
         $supplier_info = $request->input('supplierInfo');
         $payment_info = $request->input('paymentInfo');
+        $supplier_id = $supplier_info ? $supplier_info["supplier_id"] : null;
 
         if ($request->input('invoiceImage')) {
             $image_64 = $request->input('invoiceImage');
@@ -111,6 +115,16 @@ class PurchaseController extends Controller
                         ];
                     }
                 }
+
+                if (!$this->create_account_entry($purchase->purchase_id, $payment_info, $purchase_type, $supplier_id)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'status' => false,
+                        'message' => "purchase.error_purchases_or_update",
+                        'info' => 'Error Inserting Account Entry',
+                    ], 200);
+                }
+
                 PurchaseItem::insert($item_list);
                 PurchaseItemsTaxes::insert($item_tax_list);
                 Inventory::insert($inventory_list);
@@ -151,5 +165,94 @@ class PurchaseController extends Controller
 
         $average_price = bcdiv(bcadd(bcmul($new_quantity, $new_cost), bcmul($current_stock, $current_cost)), $total_quantity);
         return Item::where('item_id', $item_id)->update(array('cost_price' => $average_price));
+    }
+
+    private function create_account_entry($purchase_id, $payment_info, $purchase_type, $supplier_id = null)
+    {
+        try {
+            $transaction_type = ($purchase_type == 'CAPR' || $purchase_type == 'CRPR') ? 'R' : 'P';
+            $description = ($transaction_type == 'P') ? 'PURCHASE' : 'PURCHASE RETURN';
+            $transactions_data = [
+                'transaction_type' => 'P',
+                'document_no' => $purchase_id,
+                'inserted_by' => decrypt(auth()->user()->encrypted_employee),
+                'description' => "{$description} {$purchase_id}",
+            ];
+
+            //db transaction starting
+            DB::beginTransaction();
+            $transaction = AccountsTransaction::create($transactions_data);
+
+            $ledger_data = [
+                [
+                    'transaction_id' => $transaction->transaction_id,
+                    'account_id' => '431',
+                    'entry_type' => $transaction_type == 'P' ? 'C' : 'D',
+                    'amount' => $payment_info['total'],
+                    'person_id' => $supplier_id ? $supplier_id : null,
+                    'person_type' => $supplier_id ? 'S' : null,
+                ], [
+                    'transaction_id' => $transaction->transaction_id,
+                    'account_id' => '449',
+                    'entry_type' => $transaction_type == 'P' ? 'D' : 'C',
+                    'amount' => $payment_info['tax'],
+                ],
+                [
+                    'transaction_id' => $transaction->transaction_id,
+                    'account_id' => '211',
+                    'entry_type' => $transaction_type == 'P' ? 'C' : 'D',
+                    'amount' => $payment_info['subtotal'],
+                ],
+            ];
+
+            foreach ($ledger_data as $ledger) {
+                AccountLedgerEntry::insert($ledger);
+            }
+
+            if ($purchase_type == 'CAPR' || $purchase_type == 'CAP') {
+                if (count($payment_info['payment']) > 0) {
+                    //validate total payment is equal to toatl cart
+
+                    $voucher = AccountVoucher::create(['document_type' => 'TR']);
+
+                    $type = $transaction_type == 'P' ? 'PURCHASE' : 'PURCHASE RETURN';
+
+                    $voucher_transactions_data = [
+                        'transaction_type' => 'TR',
+                        'document_no' => $voucher->document_id,
+                        'inserted_by' => decrypt(auth()->user()->encrypted_employee),
+                        'description' => 'Payment Against ' . $type . ' - ' . $purchase_id,
+                    ];
+                    $voucher_transaction = AccountsTransaction::create($voucher_transactions_data);
+
+                    foreach ($payment_info['payment'] as $payment) {
+                        $voucher_ledger_from_data = [
+                            'transaction_id' => $voucher_transaction->transaction_id,
+                            'account_id' => 431,
+                            'entry_type' => $transaction_type == 'P' ? 'D' : 'C',
+                            'amount' => $payment['amount'],
+                            'person_id' => $supplier_id ? $supplier_id : null,
+                            'person_type' => $supplier_id ? 'C' : null,
+                        ];
+                        AccountLedgerEntry::insert($voucher_ledger_from_data);
+
+                        $voucher_ledger_to_data = [
+                            'transaction_id' => $voucher_transaction->transaction_id,
+                            'account_id' => $payment['type'],
+                            'entry_type' => $transaction_type == 'P' ? 'C' : 'D',
+                            'amount' => $payment['amount'],
+                        ];
+
+                        AccountLedgerEntry::insert($voucher_ledger_to_data);
+                    }
+                }
+            }
+            DB::commit();
+        } catch (\Exception$e) {
+            DB::rollBack();
+            info($e);
+            return false;
+        }
+        return true;
     }
 }

@@ -135,7 +135,7 @@ class SupplierController extends Controller
     //get Supplier by id
     public function get_supplier_by_id(Request $request)
     {
-        $supplier = Supplier::with('details', 'opening_balance')->find(decrypt($request->input('supplier')));
+        $supplier = Supplier::with('details', 'opening_balance')->find(decrypt($request->input('supplier')))->makeVisible('supplier_id');
         return response()->json([
             'auth' => true,
             'data' => $supplier,

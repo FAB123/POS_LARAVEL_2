@@ -73,7 +73,7 @@ class ConfigurationController extends Controller
             DB::commit();
             return response()->json([
                 'status' => true,
-                'message' => 'configuration.saved',
+                'message' => 'configuration.configuration_saved',
             ], 200);
         } catch (\Exception$e) {
             return response()->json([
@@ -267,6 +267,8 @@ class ConfigurationController extends Controller
             'data' => $units,
         ], 200);
     }
+
+
 
     //get unit by id
     public function get_unit_by_id(Request $request)

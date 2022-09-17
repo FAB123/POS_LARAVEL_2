@@ -136,6 +136,17 @@ class CustomerController extends Controller
     //get customer by id
     public function get_customer_by_id(Request $request)
     {
+        // $customer = DB::table('customers')
+        //     ->select('customers.customer_id as customer_id', 'customers.name', 'customers.mobile',
+        //         'customers.email', 'customers.company_name', 'customers.vat_number',
+        //         'customers.payment_type', 'customers.customer_type', 'customers.taxable',
+        //         'customers.status', 'customers.created_at', 'customers.updated_at')
+        //     ->leftJoin('customer_details', 'customers.customer_id', '=', 'customer_details.customer_id')
+        //     ->leftJoin('account_opening_balances', 'customers.customer_id', '=', 'account_opening_balances.account_sub_id')
+        //     ->where('customer_id', decrypt($request->input('customer')))
+        //     ->get()
+        //     ->makeVisible('customer_id');
+
         $customer = Customer::with('details', 'opening_balance')->find(decrypt($request->input('customer')))->makeVisible('customer_id');
         return response()->json([
             'auth' => true,

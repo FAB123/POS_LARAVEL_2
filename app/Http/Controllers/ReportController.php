@@ -16,7 +16,7 @@ class ReportController extends Controller
         $option1 = $request->input('option1');
         $location = $request->input('location');
 
-        $summary_sales = DB::table('sales_items')
+        $data = DB::table('sales_items')
             ->select('sales.*', DB::raw('SUM(pos_sales_items.sold_quantity) as sold_quantity'), DB::raw('SUM(pos_sales_items.item_cost_price) as item_cost_price'),
                 'customers.name as customer_name', 'employees.name as employee_name')
             ->join('sales', 'sales_items.sale_id', '=', 'sales.sale_id')
@@ -35,8 +35,27 @@ class ReportController extends Controller
             ->groupBy('sale_id')
             ->paginate($per_page, ['*'], 'page', $page);
 
+        $summary_data = DB::table('sales_items')
+            ->select(
+                DB::raw('SUM(pos_sales_items.sold_quantity) as quantity'),
+                DB::raw('SUM(pos_sales_items.item_cost_price) as cost_price'),
+                DB::raw('SUM(pos_sales.sub_total) as subtotal'),
+                DB::raw('SUM(pos_sales.tax) as tax'),
+                DB::raw('SUM(pos_sales.total) as total'),
+            )
+            ->join('sales', 'sales_items.sale_id', '=', 'sales.sale_id')
+            ->whereBetween('sales.created_at', [urldecode($request->input("from")), urldecode($request->input("to"))])
+            ->when($location != 'ALL', function ($query) use ($request) {
+                $query->where('sales_items.location_id', $request->input("location"));
+            })
+            ->when($option1 != 'ALL', function ($query) use ($request) {
+                $query->where('sale_type', $request->input("option1"));
+            })
+            ->get();
+
         return response()->json([
-            'data' => $summary_sales,
+            'data' => $data,
+            'summary_data' => $summary_data,
         ], 200);
     }
 
@@ -760,7 +779,6 @@ class ReportController extends Controller
     }
 
     //account general journal report
-
     public function get_general_journal(Request $request)
     {
         $page = $request->input('page', 1);
