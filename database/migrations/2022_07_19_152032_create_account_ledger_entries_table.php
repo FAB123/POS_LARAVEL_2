@@ -22,7 +22,7 @@ class CreateAccountLedgerEntriesTable extends Migration
             $table->enum('entry_type', ['C', 'D']);
             $table->double('amount', 15, 3);
             $table->unsignedBigInteger('person_id')->nullable()->index();
-            $table->enum('person_type', ['C', 'S', 'E'])->nullable();;
+            $table->enum('person_type', ['C', 'S', 'E'])->nullable();
             $table->enum('cost_centre', ['S', 'P'])->nullable();
             // $table->timestamps();
         });

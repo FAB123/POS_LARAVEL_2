@@ -24,6 +24,8 @@ class CreateSalesItemsTable extends Migration
             $table->double('sold_quantity', 15, 3)->nullable();
             $table->double('item_cost_price', 15, 3)->default(0.000)->nullable();
             $table->double('item_unit_price', 15, 3)->nullable();
+            $table->double('discount', 15, 3)->default(0.000)->nullable();
+            $table->enum('discount_type', ['C', 'P'])->nullable();
             $table->double('item_sub_total', 15, 3)->nullable();
             $table->unsignedBigInteger('location_id')->index();
             $table->foreign('location_id')->references('location_id')->on('stock_locations');

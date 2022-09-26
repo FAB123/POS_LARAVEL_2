@@ -99,6 +99,8 @@ class PurchaseController extends Controller
                         'serialnumber' => isset($item['serial']) ? $item['serial'] : null,
                         'purchase_quantity' => $item['quantity'],
                         'item_cost_price' => $item['cost_price'],
+                        'discount' => $item['discount'],
+                        'discount_type' => $item['discount_type'],
                         'location_id' => $store_id,
                     ];
 
@@ -200,7 +202,7 @@ class PurchaseController extends Controller
                 [
                     'transaction_id' => $transaction->transaction_id,
                     'account_id' => '211',
-                    'entry_type' => $transaction_type == 'P' ? 'C' : 'D',
+                    'entry_type' => $transaction_type == 'P' ? 'D' : 'C',
                     'amount' => $payment_info['subtotal'],
                 ],
             ];
@@ -221,7 +223,7 @@ class PurchaseController extends Controller
                         'transaction_type' => 'TR',
                         'document_no' => $voucher->document_id,
                         'inserted_by' => decrypt(auth()->user()->encrypted_employee),
-                        'description' => 'Payment Against ' . $type . ' - ' . $purchase_id,
+                        'description' => 'Against ' . $type . ' - ' . $purchase_id,
                     ];
                     $voucher_transaction = AccountsTransaction::create($voucher_transactions_data);
 

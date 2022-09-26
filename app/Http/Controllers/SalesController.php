@@ -109,6 +109,8 @@ class SalesController extends Controller
                         'serialnumber' => isset($item['serial']) ? $item['serial'] : null,
                         'sold_quantity' => $item['quantity'],
                         'item_cost_price' => bcmul($item['cost_price'], $item['quantity']),
+                        'discount' => $item['discount'],
+                        'discount_type' => $item['discount_type'],
                         'item_unit_price' => $item['unit_price'],
                         'item_sub_total' => $item['subTotal'],
                         'location_id' => $store_id,
@@ -221,6 +223,8 @@ class SalesController extends Controller
                     'serialnumber' => $item->serialnumber,
                     'sold_quantity' => $item->sold_quantity,
                     'item_unit_price' => $item->item_unit_price,
+                    'discount' => $item->discount,
+                    'discount_type' => $item->discount_type,
                     'item_sub_total' => $item->item_sub_total,
                     'location_id' => $item->location_id,
                     'tax_amount' => $item->tax_details->sum('amount'),
@@ -259,86 +263,182 @@ class SalesController extends Controller
             //db transaction starting
             DB::beginTransaction();
             $transaction = AccountsTransaction::create($transactions_data);
-
             $ledger_data = [
                 [
                     'transaction_id' => $transaction->transaction_id,
-                    'account_id' => '241',
-                    'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
-                    'amount' => $payment_info['total'],
-                    'person_id' => $customer_id ? $customer_id : null,
-                    'person_type' => $customer_id ? 'C' : null,
-                ], [
-                    'transaction_id' => $transaction->transaction_id,
-                    'account_id' => '449',
-                    'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
-                    'amount' => $payment_info['tax'],
-                ],
-                [
-                    'transaction_id' => $transaction->transaction_id,
-                    'account_id' => '500',
-                    'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
-                    'amount' => $payment_info['subtotal'],
-                ],
-                [
-                    'transaction_id' => $transaction->transaction_id,
-                    'account_id' => '704',
+                    'account_id' => '704', //cost of goods sold
                     'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
                     'amount' => $total_cost_price,
                 ],
                 [
                     'transaction_id' => $transaction->transaction_id,
-                    'account_id' => '211',
+                    'account_id' => '211', //stock
                     'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
                     'amount' => $total_cost_price,
                 ],
             ];
 
+            if ($sale_type == 'CASR' || $sale_type == 'CAS') {
+                if ($customer_id) {
+                    $ledger_data[] = [
+                        'transaction_id' => $transaction->transaction_id,
+                        'account_id' => '241', //account recivable
+                        'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
+                        'amount' => $payment_info['total'],
+                        'person_id' => $customer_id ? $customer_id : null,
+                        'person_type' => $customer_id ? 'C' : null,
+                    ];
+                    $ledger_data[] = [
+                        'transaction_id' => $transaction->transaction_id,
+                        'account_id' => '449', //tax payable
+                        'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                        'amount' => $payment_info['tax'],
+                    ];
+                    $ledger_data[] = [
+                        'transaction_id' => $transaction->transaction_id,
+                        'account_id' => '500', //sales
+                        'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                        'amount' => $payment_info['subtotal'],
+                    ];
+                } else {
+                    if (count($payment_info['payment']) > 0) {
+                        $available_amount = 0;
+                        $tax_payment_done = false;
+                        foreach ($payment_info['payment'] as $payment) {
+                            $available_amount = $payment['amount'];
+                            //insert amount to specified ledger
+                            $ledger_data[] = [
+                                'transaction_id' => $transaction->transaction_id,
+                                'account_id' => $payment['type'],
+                                'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
+                                'amount' => $available_amount,
+                                'person_id' => $customer_id ? $customer_id : null,
+                                'person_type' => $customer_id ? 'C' : null,
+                            ];
+
+                            while ($available_amount > 0) {
+                                if (!$tax_payment_done) {
+                                    $ledger_data[] = [
+                                        'transaction_id' => $transaction->transaction_id,
+                                        'account_id' => '449', //tax payabel
+                                        'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                                        'amount' => ($available_amount >= $payment_info['tax']) ? $payment_info['tax'] : $available_amount,
+                                    ];
+                                    //update availabe fund
+                                    if ($available_amount >= $payment_info['tax']) {
+                                        $available_amount = $available_amount - $payment_info['tax'];
+                                        $tax_payment_done = true;
+                                    } else {
+                                        $available_amount = 0;
+                                    }
+                                }
+                                if ($available_amount > 0) {
+                                    $ledger_data[] = [
+                                        'transaction_id' => $transaction->transaction_id,
+                                        'account_id' => '500', //sales
+                                        'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                                        'amount' => ($available_amount >= $payment_info['subtotal']) ? $payment_info['subtotal'] : $available_amount,
+                                    ];
+
+                                    //update availabe fund
+                                    if ($available_amount >= $payment_info['subtotal']) {
+                                        $available_amount = $available_amount - $payment_info['subtotal'];
+                                    } else {
+                                        $available_amount = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                $ledger_data[] = [
+                    'transaction_id' => $transaction->transaction_id,
+                    'account_id' => '241', //account recivable
+                    'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
+                    'amount' => $payment_info['total'],
+                    'person_id' => $customer_id ? $customer_id : null,
+                    'person_type' => $customer_id ? 'C' : null,
+                ];
+                $ledger_data[] = [
+                    'transaction_id' => $transaction->transaction_id,
+                    'account_id' => '449', //tax payable
+                    'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                    'amount' => $payment_info['tax'],
+                ];
+                $ledger_data[] = [
+                    'transaction_id' => $transaction->transaction_id,
+                    'account_id' => '500', //sales
+                    'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                    'amount' => $payment_info['subtotal'],
+                ];
+            }
+
+            //applying aditional discount
+            if ($payment_info['discount'] != 0) {
+                $ledger_data[] = [
+                    'transaction_id' => $transaction->transaction_id,
+                    'account_id' => $customer_id ? '241' : $payment_info['payment'][0]['type'],
+                    'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                    'person_id' => $customer_id ? $customer_id : null,
+                    'amount' => $payment_info['discount'],
+                ];
+                $ledger_data[] = [
+                    'transaction_id' => $transaction->transaction_id,
+                    'account_id' => '821', //aditional discount
+                    'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
+                    'amount' => $payment_info['discount'],
+                ];
+
+            }
+
+            info($ledger_data);
             foreach ($ledger_data as $ledger) {
                 AccountLedgerEntry::insert($ledger);
             }
 
-            if ($sale_type == 'CASR' || $sale_type == 'CAS') {
-                if (count($payment_info['payment']) > 0) {
-                    //validate total payment is equal to toatl cart
+            //inserting payment vouchar
+            if ($sale_type == 'CAS' || $sale_type == 'CASR') {
+                if ($customer_id) {
+                    if (count($payment_info['payment']) > 0) {
+                        $voucher = AccountVoucher::create(['document_type' => 'TP']);
 
-                    $voucher = AccountVoucher::create(['document_type' => 'TP']);
+                        $type = $transaction_type == 'S' ? 'SALES' : 'SALES RETURN';
 
-                    $type = $transaction_type == 'S' ? 'SALES' : 'SALES RETURN';
-
-                    $voucher_transactions_data = [
-                        'transaction_type' => 'TR',
-                        'document_no' => $voucher->document_id,
-                        'inserted_by' => decrypt(auth()->user()->encrypted_employee),
-                        'description' => 'Payment Against ' . $type . ' - ' . $sale_id,
-                    ];
-                    $voucher_transaction = AccountsTransaction::create($voucher_transactions_data);
-
-                    foreach ($payment_info['payment'] as $payment) {
-                        $voucher_ledger_from_data = [
-                            'transaction_id' => $voucher_transaction->transaction_id,
-                            'account_id' => 241,
-                            'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
-                            'amount' => $payment['amount'],
-                            'person_id' => $customer_id ? $customer_id : null,
-                            'person_type' => $customer_id ? 'C' : null,
+                        $voucher_transactions_data = [
+                            'transaction_type' => 'TR',
+                            'document_no' => $voucher->document_id,
+                            'inserted_by' => decrypt(auth()->user()->encrypted_employee),
+                            'description' => 'Against ' . $type . ' - ' . $sale_id,
                         ];
-                        AccountLedgerEntry::insert($voucher_ledger_from_data);
+                        $voucher_transaction = AccountsTransaction::create($voucher_transactions_data);
 
-                        $voucher_ledger_to_data = [
-                            'transaction_id' => $voucher_transaction->transaction_id,
-                            'account_id' => $payment['type'],
-                            'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
-                            'amount' => $payment['amount'],
-                        ];
+                        foreach ($payment_info['payment'] as $payment) {
+                            $voucher_ledger_from_data = [
+                                'transaction_id' => $voucher_transaction->transaction_id,
+                                'account_id' => 241,
+                                'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
+                                'amount' => $payment['amount'],
+                                'person_id' => $customer_id ? $customer_id : null,
+                                'person_type' => $customer_id ? 'C' : null,
+                            ];
+                            AccountLedgerEntry::insert($voucher_ledger_from_data);
 
-                        AccountLedgerEntry::insert($voucher_ledger_to_data);
+                            $voucher_ledger_to_data = [
+                                'transaction_id' => $voucher_transaction->transaction_id,
+                                'account_id' => $payment['type'],
+                                'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
+                                'amount' => $payment['amount'],
+                            ];
+
+                            AccountLedgerEntry::insert($voucher_ledger_to_data);
+                        }
                     }
-
                 }
             }
             DB::commit();
         } catch (\Exception$e) {
+
             DB::rollBack();
             info($e);
             return false;

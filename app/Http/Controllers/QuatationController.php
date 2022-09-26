@@ -41,6 +41,8 @@ class QuatationController extends Controller
                         'serialnumber' => isset($item['serial']) ? $item['serial'] : null,
                         'quotation_quantity' => $item['quantity'],
                         'item_unit_price' => $item['unit_price'],
+                        'discount' => $item['discount'],
+                        'discount_type' => $item['discount_type'],
                         'item_sub_total' => $item['subTotal'],
                         'location_id' => $store_id,
                     ];
@@ -141,6 +143,8 @@ class QuatationController extends Controller
                     'serialnumber' => $item->serialnumber,
                     'quotation_quantity' => $item->quotation_quantity,
                     'item_unit_price' => $item->item_unit_price,
+                    'discount' => $item->discount,
+                    'discount_type' => $item->discount_type,
                     'item_sub_total' => $item->item_sub_total,
                     'location_id' => $item->location_id,
                     'tax_amount' => $item->tax_details->sum('amount'),

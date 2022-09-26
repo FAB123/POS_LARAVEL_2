@@ -4,10 +4,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::group(['namespace' => 'App\Http\Controllers'], function () {
     Route::group(['prefix' => 'v2'], function () {
+        Route::get("sendmail", 'HomeController@send_mail');
+        // Route::post("send_text_email", 'MessageController@send_text_email');
 
         Route::group(['prefix' => 'login'], function () {
             Route::post("dologin", "LoginController@doLogin");
             Route::post("getstores", "LoginController@getAllStores");
+
         });
 
         Route::middleware('auth:sanctum')->group(function () {
@@ -23,6 +26,12 @@ Route::group(['namespace' => 'App\Http\Controllers'], function () {
             Route::group(['prefix' => 'dashboard'], function () {
                 Route::get("get_basic_info", "HomeController@get_basic_info");
                 Route::post('get_monthly_graph', 'HomeController@home');
+
+            });
+
+            //message routes
+            Route::group(['prefix' => 'message'], function () {
+                Route::post('send_text_email', 'MessageController@send_text_email');
             });
 
             //customer routes

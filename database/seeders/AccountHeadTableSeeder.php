@@ -290,6 +290,13 @@ class AccountHeadTableSeeder extends Seeder
                 'editable' => 0,
                 'inserted_by' => 1,
             ],
+            [
+                'account_id' => '821',
+                'account_name' => 'Additional Discount',
+                'account_type' => 5,
+                'editable' => 0,
+                'inserted_by' => 1,
+            ],
         ]);
     }
 }

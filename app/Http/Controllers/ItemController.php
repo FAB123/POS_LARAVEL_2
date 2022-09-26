@@ -122,7 +122,7 @@ class ItemController extends Controller
             return response()->json([
                 'error' => false,
                 'item_id' => $saved_item->item_id,
-                'message' => "items.new_customer_or_update",
+                'message' => "items.new_item_or_update",
             ], 200);
 
         } catch (\Exception$e) {
@@ -195,7 +195,7 @@ class ItemController extends Controller
 
         // $result = $query->first();
         // $result['item_quantity'] = ItemsQuantity::select('quantity')->where('location_id', $request->input('store'))->find($result->item_id)->quantity;
-        $result = $query->with('vat_list')->get();
+        $result = $query->with(['vat_list', 'item_unit'])->get();
         $result->makeVisible('item_id');
 
         $result->each(function ($item, $key) use ($store_id, $result) {
@@ -214,7 +214,7 @@ class ItemController extends Controller
     {
         // $query = Item::query();
         $keyword = $request->input('query');
-        $item = Item::where("barcode", $keyword)->orWhere("item_id", $keyword)->with('vat_list')->first();
+        $item = Item::where("barcode", $keyword)->orWhere("item_id", $keyword)->with(['vat_list', 'item_unit'])->first();
         if ($item) {
             $item->makeVisible('item_id');
             $item->makeHidden('encrypted_item');

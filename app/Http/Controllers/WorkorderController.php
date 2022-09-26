@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Workorders\Workorder;
 use App\Models\Workorders\WorkordersItem;
 use App\Models\Workorders\WorkordersItemsTax;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class WorkorderController extends Controller
@@ -44,6 +44,8 @@ class WorkorderController extends Controller
                         'serialnumber' => isset($item['serial']) ? $item['serial'] : null,
                         'workorder_quantity' => $item['quantity'],
                         'item_unit_price' => $item['unit_price'],
+                        'discount' => $item['discount'],
+                        'discount_type' => $item['discount_type'],
                         'item_sub_total' => $item['subTotal'],
                         'location_id' => $store_id,
                     ];
@@ -83,6 +85,7 @@ class WorkorderController extends Controller
             ], 200);
         }
     }
+
     public function get_workorder(Request $request)
     {
         $workorder = $this->fetch_workorder($request->input('id'));
@@ -143,6 +146,8 @@ class WorkorderController extends Controller
                     'serialnumber' => $item->serialnumber,
                     'workorder_quantity' => $item->quotation_quantity,
                     'item_unit_price' => $item->item_unit_price,
+                    'discount' => $item->discount,
+                    'discount_type' => $item->discount_type,
                     'item_sub_total' => $item->item_sub_total,
                     'location_id' => $item->location_id,
                     'tax_amount' => $item->tax_details->sum('amount'),

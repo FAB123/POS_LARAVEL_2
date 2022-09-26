@@ -21,6 +21,7 @@ class CreateAccountOpeningBalancesTable extends Migration
             $table->foreign('account_id')->references('account_id')->on('account_heads');
             $table->unsignedBigInteger('account_sub_id')->nullable()->index();
             $table->double('amount', 15, 3)->default(0.00);
+            $table->enum('entry_type', ['C', 'D'])->nullable();
             $table->integer('year')->length(4);
             $table->primary(['account_id', 'account_sub_id']);
             $table->timestamps();

@@ -82,7 +82,8 @@ class AccountHeadController extends Controller
     {
         $account_id = $request->input("account_id");
         $value = $request->input("value");
-        $status = AccountOpeningBalance::where('account_id', $account_id)->update(array('amount' => $value));
+        $entry_type = $request->input("entryType");
+        $status = AccountOpeningBalance::where('account_id', $account_id)->update(array('amount' => $value, 'entry_type' => $entry_type));
         return response()->json([
             'status' => $status,
         ], 200);

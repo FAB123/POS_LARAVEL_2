@@ -3,6 +3,7 @@
 namespace App\Models\Item;
 
 use App\Models\Account\AccountOpeningBalance;
+use App\Models\Configurations\StoreUnit;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -27,6 +28,11 @@ class Item extends Model
     public function item_quantity()
     {
         return $this->hasOne(ItemsQuantity::class, 'item_id', 'item_id');
+    }
+
+    public function item_unit()
+    {
+        return $this->hasOne(StoreUnit::class, 'unit_id', 'unit_type');
     }
 
     public function opening_balance()

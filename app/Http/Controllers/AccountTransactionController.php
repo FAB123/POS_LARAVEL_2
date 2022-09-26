@@ -44,7 +44,7 @@ class AccountTransactionController extends Controller
                     $ledger_data[] = [
                         'transaction_id' => $transaction->transaction_id,
                         'account_id' => $item['account_id'],
-                        'entry_type' => $transaction_type == 'TP' ? 'D' : 'C',
+                        'entry_type' => $transaction_type == 'TP' ? 'C' : 'D',
                         'amount' => $item['amount'],
                         'person_id' => $inputs['account_holder'],
                         'person_type' => $inputs['account_holder_type'],
@@ -54,8 +54,8 @@ class AccountTransactionController extends Controller
 
                 $ledger_data[] = [
                     'transaction_id' => $transaction->transaction_id,
-                    'account_id' => '202',
-                    'entry_type' => $transaction_type == 'TP' ? 'C' : 'D',
+                    'account_id' => ($inputs['account_holder_type'] === 'C') ? '241' : '431',
+                    'entry_type' => $transaction_type == 'TP' ? 'D' : 'C',
                     'amount' => $total_amount,
                     'person_id' => $inputs['account_holder'],
                     'person_type' => $inputs['account_holder_type'],
@@ -67,12 +67,14 @@ class AccountTransactionController extends Controller
 
             return response()->json([
                 'status' => true,
+                'message' => 'accounts.new_account_voucher_saved',
             ], 200);
         } catch (\Exception$e) {
             DB::rollback();
             return response()->json([
                 'status' => false,
-                'message' => $e,
+                'message' => 'accounts.error_saving_account_voucher',
+                'info' => $e,
             ], 200);
         }
     }

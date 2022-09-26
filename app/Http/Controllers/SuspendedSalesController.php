@@ -23,7 +23,7 @@ class SuspendedSalesController extends Controller
             //db transaction starting
             DB::beginTransaction();
             $suspended_sale = SuspendedSale::create([
-                'customer_id' => $customer_info["customer_id"],
+                'customer_id' => $customer_info ? $customer_info["customer_id"] : null,
                 'employee_id' => decrypt(auth()->user()->encrypted_employee),
                 'bill_type' => $bill_type,
                 'sale_type' => $sale_type,
@@ -45,6 +45,8 @@ class SuspendedSalesController extends Controller
                     'serialnumber' => isset($item['serial']) ? $item['serial'] : null,
                     'suspended_quantity' => $item['quantity'],
                     'item_unit_price' => $item['unit_price'],
+                    'discount_type' => $item['discount_type'],
+                    'discount' => $item['discount'],
                     'item_sub_total' => $item['subTotal'],
                     'location_id' => $store_id,
                 ];
@@ -135,6 +137,8 @@ class SuspendedSalesController extends Controller
                     'serialnumber' => $item->serialnumber,
                     'suspended_quantity' => $item->suspended_quantity,
                     'item_unit_price' => $item->item_unit_price,
+                    'discount_type' => $item->discount_type,
+                    'discount' => $item->discount,
                     'item_sub_total' => $item->item_sub_total,
                     'location_id' => $item->location_id,
                     'tax_amount' => $item->tax_details->sum('amount'),
