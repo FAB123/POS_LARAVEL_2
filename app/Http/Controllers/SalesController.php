@@ -7,7 +7,9 @@ use App\Models\Account\AccountsTransaction;
 use App\Models\Account\AccountVoucher;
 use App\Models\Inventory;
 use App\Models\Item\BoxedItem;
+use App\Models\Item\Item;
 use App\Models\Item\ItemsQuantity;
+use App\Models\Purchase\PurchaseItem;
 use App\Models\Sales\Sale;
 use App\Models\Sales\SalesItem;
 use App\Models\Sales\SalesItemsTaxes;
@@ -177,6 +179,36 @@ class SalesController extends Controller
         }
     }
 
+    public function get_sales_history(Request $request)
+    {
+        $type = $request->input('type');
+        $customer = $request->input('customer');
+        $item_id = $request->input('item_id');
+        if ($type == "salesHistory") {
+            $data = SalesItem::join('sales', 'sales.sale_id', 'sales_items.sale_id')
+                ->select('created_at as date', 'sales.sale_id as sale_id', 'item_unit_price as price', 'sold_quantity as quantity')
+                ->where('item_id', $item_id)->limit(15)->get();
+        } else if ($type == "customerHistory") {
+            $data = SalesItem::join('sales', 'sales.sale_id', 'sales_items.sale_id')
+                ->select('created_at as date', 'sales.sale_id as sale_id', 'item_unit_price as price', 'sold_quantity as quantity')
+                ->where('sales.customer_id', $customer)
+                ->where('item_id', $item_id)->limit(15)->get();
+        } else if ($type == "costHistory") {
+            $data = PurchaseItem::join('purchases', 'purchases.purchase_id', 'purchase_items.purchase_id')
+                ->select('created_at as date', 'purchases.purchase_id as sale_id', 'item_cost_price as price', 'purchase_quantity as quantity')
+                ->where('item_id', $item_id)->limit(15)->get();
+        } else if ($type == "details") {
+            $data = Item::join('items_quantities', 'items_quantities.item_id', 'items.item_id')
+                ->select('item_name', 'item_name_ar', 'category', 'shelf', 'cost_price', 'unit_price', 'wholesale_price', 'minimum_price')
+                ->where('items.item_id', $item_id)->first();
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => $data,
+        ], 200);
+    }
+
     //get quatation
     private function fetch_sale($sale_id = null)
     {
@@ -304,6 +336,8 @@ class SalesController extends Controller
                     if (count($payment_info['payment']) > 0) {
                         $available_amount = 0;
                         $tax_payment_done = false;
+                        $payable_tax = $payment_info['tax'];
+                        $payable_amount = $payment_info['subtotal'];
                         foreach ($payment_info['payment'] as $payment) {
                             $available_amount = $payment['amount'];
                             //insert amount to specified ledger
@@ -322,28 +356,31 @@ class SalesController extends Controller
                                         'transaction_id' => $transaction->transaction_id,
                                         'account_id' => '449', //tax payabel
                                         'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
-                                        'amount' => ($available_amount >= $payment_info['tax']) ? $payment_info['tax'] : $available_amount,
+                                        'amount' => ($available_amount >= $payable_tax) ? $payable_tax : $available_amount,
                                     ];
                                     //update availabe fund
-                                    if ($available_amount >= $payment_info['tax']) {
-                                        $available_amount = $available_amount - $payment_info['tax'];
+                                    if ($available_amount >= $payable_tax) {
+                                        $available_amount = bcsub($available_amount, $payable_tax, 2);
                                         $tax_payment_done = true;
                                     } else {
+                                        $payable_tax = bcsub($payable_tax, $available_amount, 2);
                                         $available_amount = 0;
                                     }
                                 }
+
                                 if ($available_amount > 0) {
                                     $ledger_data[] = [
                                         'transaction_id' => $transaction->transaction_id,
                                         'account_id' => '500', //sales
                                         'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
-                                        'amount' => ($available_amount >= $payment_info['subtotal']) ? $payment_info['subtotal'] : $available_amount,
+                                        'amount' => ($available_amount >= $payable_amount) ? $payable_amount : $available_amount,
                                     ];
 
                                     //update availabe fund
-                                    if ($available_amount >= $payment_info['subtotal']) {
-                                        $available_amount = $available_amount - $payment_info['subtotal'];
+                                    if ($available_amount >= $payable_amount) {
+                                        $available_amount = bcsub($available_amount, $payable_amount, 2);
                                     } else {
+                                        $payable_amount = bcsub($payable_amount, $available_amount, 2);
                                         $available_amount = 0;
                                     }
                                 }
@@ -378,21 +415,19 @@ class SalesController extends Controller
             if ($payment_info['discount'] != 0) {
                 $ledger_data[] = [
                     'transaction_id' => $transaction->transaction_id,
+                    'account_id' => '821', //aditional discount
+                    'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
+                    'amount' => $payment_info['discount'],
+                ];
+                $ledger_data[] = [
+                    'transaction_id' => $transaction->transaction_id,
                     'account_id' => $customer_id ? '241' : $payment_info['payment'][0]['type'],
                     'entry_type' => $transaction_type == 'S' ? 'C' : 'D',
                     'person_id' => $customer_id ? $customer_id : null,
                     'amount' => $payment_info['discount'],
                 ];
-                $ledger_data[] = [
-                    'transaction_id' => $transaction->transaction_id,
-                    'account_id' => '821', //aditional discount
-                    'entry_type' => $transaction_type == 'S' ? 'D' : 'C',
-                    'amount' => $payment_info['discount'],
-                ];
-
             }
 
-            info($ledger_data);
             foreach ($ledger_data as $ledger) {
                 AccountLedgerEntry::insert($ledger);
             }
@@ -402,17 +437,14 @@ class SalesController extends Controller
                 if ($customer_id) {
                     if (count($payment_info['payment']) > 0) {
                         $voucher = AccountVoucher::create(['document_type' => 'TP']);
-
                         $type = $transaction_type == 'S' ? 'SALES' : 'SALES RETURN';
-
                         $voucher_transactions_data = [
                             'transaction_type' => 'TR',
                             'document_no' => $voucher->document_id,
                             'inserted_by' => decrypt(auth()->user()->encrypted_employee),
-                            'description' => 'Against ' . $type . ' - ' . $sale_id,
+                            'description' => 'Voucher Against ' . $type . ' - ' . $sale_id,
                         ];
                         $voucher_transaction = AccountsTransaction::create($voucher_transactions_data);
-
                         foreach ($payment_info['payment'] as $payment) {
                             $voucher_ledger_from_data = [
                                 'transaction_id' => $voucher_transaction->transaction_id,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Account\AccountOpeningBalance;
+use App\Models\Configurations\StockLocation;
 use App\Models\Item\Item;
 use App\Models\Item\ItemsQuantity;
 use App\Models\Item\ItemsTax;
@@ -90,32 +91,21 @@ class ItemController extends Controller
                 }
             }
 
-            if (ItemsQuantity::where('location_id', $request->input('store'))->find($saved_item->item_id)) {
-                ItemsQuantity::where('location_id', $request->input('store'))
-                    ->where('item_id', $saved_item->item_id)
-                    ->update(['quantity' => $request->input('item_quantity')]);
-            } else {
-                ItemsQuantity::insert([
-                    'item_id' => $saved_item->item_id,
-                    'location_id' => $request->input('store'),
-                    'quantity' => $request->input('item_quantity'),
-                ]);
-            }
+            if (!$request->input('itemID')) {
+                // pos_items_quantities
+                $locations = StockLocation::all();
+                foreach ($locations as $location) {
+                    ItemsQuantity::
+                        updateOrInsert(
+                        ['location_id' => $location['location_id'], 'item_id' => $saved_item['item_id']],
+                        ['quantity' => 0]
+                    );
 
-            //update or insert customere opening balance details
-            if (AccountOpeningBalance::where('account_sub_id', $saved_item->item_id)->find(211)) {
-                AccountOpeningBalance::where('account_sub_id', $saved_item->item_id)
-                    ->where('account_id', 211)
-                    ->where('year', date('Y'))
-                    ->update(['amount' => $request->input('opening_balance'), 'inserted_by' => decrypt(auth()->user()->encrypted_employee)]);
-            } else {
-                AccountOpeningBalance::insert([
-                    'account_id' => 211,
-                    'account_sub_id' => $saved_item->item_id,
-                    'amount' => $request->input('opening_balance'),
-                    'inserted_by' => decrypt(auth()->user()->encrypted_employee),
-                    'year' => date('Y'),
-                ]);
+                    AccountOpeningBalance::updateOrInsert(
+                        ['account_sub_id' => $saved_item['item_id'], 'location_id' => $location['location_id'], 'account_id' => 211, 'year' => date('Y')],
+                        ['amount' => 0, 'inserted_by' => decrypt(auth()->user()->encrypted_employee)]
+                    );
+                }
             }
 
             DB::commit();
@@ -220,22 +210,6 @@ class ItemController extends Controller
             $item->makeHidden('encrypted_item');
             $item['item_quantity'] = ItemsQuantity::select('quantity')->where('location_id', $request->header('Store'))->find($item->item_id)->quantity;
         }
-        // if ($item) {
-        //     $item->makeVisible('item_id');
-        //     $item->makeHidden('encrypted_item');
-        //     $item['item_quantity'] = ItemsQuantity::select('quantity')->where('location_id', $request->header('Store'))->find($item->item_id)->quantity;
-        // } else {
-        //     $item = Item::where("item_id", $keyword)->with('vat_list')->first();
-        //     if ($item) {
-        //         $item->makeVisible('item_id');
-        //         $item->makeHidden('encrypted_item');
-        //         $item['item_quantity'] = ItemsQuantity::select('quantity')->where('location_id', $request->header('Store'))->find($item->item_id)->quantity;
-        //     } else {
-        //         return response()->json([
-        //             'data' => null,
-        //         ], 200);
-        //     }
-        // }
 
         return response()->json([
             'data' => $item,
@@ -246,7 +220,6 @@ class ItemController extends Controller
     public function search_category(Request $request)
     {
         $query = Item::query();
-
         $keyword = $request->input('query');
         $query->whereRaw("category LIKE '%" . $keyword . "%'");
         $query->select('category');
@@ -290,4 +263,105 @@ class ItemController extends Controller
             'failed' => $failed_data,
         ], 200);
     }
+
+    //search_items for oprning balance
+    public function search_items_for_opening_balance(Request $request)
+    {
+        $store_id = $request->header('Store');
+        $page = $request->input('page', 1);
+        $per_page = $request->input('size') ? $request->input('size') : 10;
+        $items = $this->fetch_ob_items($store_id, $per_page, $page);
+
+        return response()->json([
+            'items' => $items,
+        ], 200);
+    }
+
+    public function save_items_opening_balance(Request $request)
+    {
+        $item = $request->input('item');
+        $store_id = $request->header('Store');
+        foreach ($request->input('item') as $item) {
+            $item_id = $item['item_id'];
+            DB::table('items_quantities')
+                ->updateOrInsert(
+                    ['location_id' => $store_id, 'item_id' => $item_id],
+                    ['quantity' => $item['quantity']]
+                );
+            $opening_balance = bcmul($item['cost_price'], $item['quantity']);
+            DB::table('account_opening_balances')
+                ->updateOrInsert(
+                    ['account_sub_id' => $item_id, 'location_id' => $store_id, 'account_id' => 211, 'year' => date('Y')],
+                    ['amount' => $opening_balance, 'ob' => 1, 'inserted_by' => decrypt(auth()->user()->encrypted_employee)]
+                );
+        }
+
+        $items = $this->fetch_ob_items($store_id, 10, 1);
+
+        return response()->json([
+            'items' => $items,
+        ], 200);
+    }
+
+    private function fetch_ob_items($store, $per_page, $page)
+    {
+        // $items = Item::select('items.item_id as item_id',
+        //     'items.item_name as item_name',
+        //     'items.item_name_ar as item_name_ar',
+        //     'items.cost_price as cost_price',
+        //     DB::raw('0 as quantity'),
+        //     DB::raw("CONCAT(pos_store_units.unit_name_en,' - ',pos_store_units.unit_name_ar)  AS unit_name"))
+        //     ->join('store_units', 'items.unit_type', 'store_units.unit_id')
+        //     ->rightJoin('account_opening_balances', 'items.item_id', 'account_opening_balances.account_sub_id')
+        //     ->leftJoin('items_quantities', 'items.item_id', 'items_quantities.item_id')
+        //     ->where('items.stock_type', '1')
+        //     ->where('items.is_boxed', '0')
+        //     ->where('account_opening_balances.account_id', '211')
+        //     ->where('account_opening_balances.ob', '0')
+        //     ->where('account_opening_balances.location_id', $store)
+        //     ->paginate($per_page, ['*'], 'page', $page);
+        // return $items;
+        $items = AccountOpeningBalance::select('items.item_id as item_id',
+            'items.item_name as item_name',
+            'items.item_name_ar as item_name_ar',
+            'items.cost_price as cost_price',
+            DB::raw('0 as quantity'),
+            DB::raw("CONCAT(pos_store_units.unit_name_en,' - ',pos_store_units.unit_name_ar)  AS unit_name"))
+            ->where('account_opening_balances.account_id', '211')
+            ->where('account_opening_balances.ob', '0')
+            ->where('account_opening_balances.location_id', $store)
+            ->join('items', 'account_opening_balances.account_sub_id', 'items.item_id')
+            ->join('store_units', 'items.unit_type', 'store_units.unit_id')
+            ->paginate($per_page, ['*'], 'page', $page);
+        return $items;
+    }
+
 }
+
+// if (ItemsQuantity::where('location_id', $request->input('store'))->find($saved_item->item_id)) {
+//     ItemsQuantity::where('location_id', $request->input('store'))
+//         ->where('item_id', $saved_item->item_id)
+//         ->update(['quantity' => $request->input('item_quantity')]);
+// } else {
+//     ItemsQuantity::insert([
+//         'item_id' => $saved_item->item_id,
+//         'location_id' => $request->input('store'),
+//         'quantity' => $request->input('item_quantity'),
+//     ]);
+// }
+
+// //update or insert customere opening balance details
+// if (AccountOpeningBalance::where('account_sub_id', $saved_item->item_id)->find(211)) {
+//     AccountOpeningBalance::where('account_sub_id', $saved_item->item_id)
+//         ->where('account_id', 211)
+//         ->where('year', date('Y'))
+//         ->update(['amount' => $request->input('opening_balance'), 'inserted_by' => decrypt(auth()->user()->encrypted_employee)]);
+// } else {
+//     AccountOpeningBalance::insert([
+//         'account_id' => 211,
+//         'account_sub_id' => $saved_item->item_id,
+//         'amount' => $request->input('opening_balance'),
+//         'inserted_by' => decrypt(auth()->user()->encrypted_employee),
+//         'year' => date('Y'),
+//     ]);
+// }

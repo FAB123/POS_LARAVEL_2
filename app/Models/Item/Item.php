@@ -45,6 +45,8 @@ class Item extends Model
         return encrypt($this->item_id);
     }
 
+
+
     //find boxed item
     public function scopeBoxedItems($query)
     {

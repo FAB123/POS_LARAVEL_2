@@ -20,8 +20,20 @@ class ReportController extends Controller
         $location = $request->input('location');
 
         $data = DB::table('sales_items')
-            ->select('sales.*', DB::raw('SUM(pos_sales_items.sold_quantity) as sold_quantity'), DB::raw('SUM(pos_sales_items.item_cost_price) as item_cost_price'),
-                'customers.name as customer_name', 'employees.name as employee_name')
+            ->select(
+                'sales.sale_id as sale_id',
+                'sales.created_at as created_at',
+                'sales.comments as comments',
+                'sales.bill_type as bill_type',
+                'sales.sale_type as sale_type',
+                'sales.customer_id as customer_id',
+                DB::raw('(CASE WHEN pos_sales.sale_type = \'CAS\' OR pos_sales.sale_type = \'CRS\' THEN pos_sales.sub_total ELSE CONCAT(\'-\', pos_sales.sub_total) END) AS sub_total'),
+                DB::raw('(CASE WHEN pos_sales.sale_type = \'CAS\' OR pos_sales.sale_type = \'CRS\' THEN pos_sales.tax ELSE CONCAT(\'-\', pos_sales.tax) END) AS tax'),
+                DB::raw('(CASE WHEN pos_sales.sale_type = \'CAS\' OR pos_sales.sale_type = \'CRS\' THEN pos_sales.total ELSE CONCAT(\'-\', pos_sales.total) END) AS total'),
+                DB::raw('SUM(pos_sales_items.sold_quantity) as sold_quantity'),
+                DB::raw('SUM(pos_sales_items.item_cost_price) as item_cost_price'),
+                'customers.name as customer_name',
+                'employees.name as employee_name')
             ->join('sales', 'sales_items.sale_id', '=', 'sales.sale_id')
             ->leftJoin('customers', 'sales.customer_id', '=', 'customers.customer_id')
             ->leftJoin('employees', 'sales.employee_id', '=', 'employees.employee_id')
@@ -72,7 +84,9 @@ class ReportController extends Controller
         $location = $request->input('location');
 
         $data = DB::table('purchase_items')
-            ->select('purchases.*', DB::raw('SUM(pos_purchase_items.purchase_quantity) as purchase_quantity'),
+            ->select(
+                'purchases.*',
+                DB::raw('SUM(pos_purchase_items.purchase_quantity) as purchase_quantity'),
                 'suppliers.name as supplier_name', 'employees.name as employee_name')
             ->join('purchases', 'purchases.purchase_id', '=', 'purchase_items.purchase_id')
             ->leftJoin('suppliers', 'purchases.supplier_id', '=', 'suppliers.supplier_id')
@@ -1149,6 +1163,132 @@ class ReportController extends Controller
             ->leftJoin('account_ledger_entries', 'account_ledger_entries.transaction_id', '=', 'accounts_transactions.transaction_id')
             ->whereBetween('accounts_transactions.created_at', [urldecode($request->input("from")), urldecode($request->input("to"))])
             ->where('account_ledger_entries.account_id', '=', $option1)
+            ->orderBy('accounts_transactions.created_at', 'ASC')
+            ->paginate($per_page, ['*'], 'page', $page);
+
+        $temp_collection = $ledger_ob_summary->merge($ledger_account->getCollection());
+        $ledger_account->setCollection($temp_collection);
+        $ledger_account->getCollection()->transform(function ($item) use (&$balance) {
+            $row_balance = $item->DebitAmount - $item->CreditAmount;
+            $balance = $balance + $row_balance;
+            $item->balance = $balance;
+            return $item;
+        });
+
+        return response()->json([
+            'data' => $ledger_account,
+            'info' => $ledger_ob_summary,
+        ], 200);
+    }
+
+    //customer ledger
+    public function get_customer_ledger_details(Request $request)
+    {
+        $page = $request->input('page', 1);
+        $per_page = $request->input('size') ? $request->input('size') : 10;
+
+        $location = $request->input('location');
+        $option2 = $request->input('option2');
+
+        $ledger_ob_summary = AccountOpeningBalance::select(
+            DB::raw('SUM(CASE WHEN pos_account_opening_balances.entry_type=\'D\' THEN pos_account_opening_balances.amount ELSE 0.00 END) AS OpeningDebit'),
+            DB::raw('SUM(CASE WHEN pos_account_opening_balances.entry_type=\'C\' THEN pos_account_opening_balances.amount ELSE 0.00 END) AS OpeningCredit'))
+            ->where('account_opening_balances.account_id', '=', '241')
+            ->where('account_opening_balances.account_sub_id', '=', $option2)
+            ->union(DB::table('accounts_transactions')
+                    ->select(
+                        DB::raw('SUM(CASE WHEN pos_account_ledger_entries.entry_type=\'D\' THEN pos_account_ledger_entries.amount ELSE 0.00 END) AS OpeningDebit'),
+                        DB::raw('SUM(CASE WHEN pos_account_ledger_entries.entry_type=\'C\' THEN pos_account_ledger_entries.amount ELSE 0.00 END) AS OpeningCredit'))
+                    ->leftJoin('account_ledger_entries', 'account_ledger_entries.transaction_id', '=', 'accounts_transactions.transaction_id')
+                    ->where('accounts_transactions.created_at', '<', urldecode($request->input("from")))
+                    ->where('account_ledger_entries.person_type', '=', 'C')
+                    ->where('account_ledger_entries.person_id', '=', $option2)
+                    ->where('account_ledger_entries.account_id', '=', '241'))
+
+            ->get()->pipe(function ($collection) {
+            return collect([(object) [
+                'created_at' => '',
+                'description' => 'Opening Balance',
+                'DebitAmount' => $collection->sum('OpeningDebit') ? $collection->sum('OpeningDebit') : null,
+                'CreditAmount' => $collection->sum('OpeningCredit') ? $collection->sum('OpeningCredit') : null,
+            ]]
+            );
+        });
+
+        $balance = 0;
+        $ledger_account = AccountsTransaction::select(
+            'accounts_transactions.created_at',
+            'accounts_transactions.description',
+            DB::raw('(CASE WHEN pos_account_ledger_entries.entry_type=\'D\' THEN pos_account_ledger_entries.amount ELSE NULL END) AS DebitAmount'),
+            DB::raw('(CASE WHEN pos_account_ledger_entries.entry_type=\'C\' THEN pos_account_ledger_entries.amount ELSE NULL END) AS CreditAmount'))
+            ->leftJoin('account_ledger_entries', 'account_ledger_entries.transaction_id', '=', 'accounts_transactions.transaction_id')
+            ->whereBetween('accounts_transactions.created_at', [urldecode($request->input("from")), urldecode($request->input("to"))])
+            ->where('account_ledger_entries.person_type', '=', 'C')
+            ->where('account_ledger_entries.account_id', '=', '241')
+            ->where('account_ledger_entries.person_id', '=', $option2)
+            ->orderBy('accounts_transactions.created_at', 'ASC')
+            ->paginate($per_page, ['*'], 'page', $page);
+
+        $temp_collection = $ledger_ob_summary->merge($ledger_account->getCollection());
+        $ledger_account->setCollection($temp_collection);
+        $ledger_account->getCollection()->transform(function ($item) use (&$balance) {
+            $row_balance = $item->DebitAmount - $item->CreditAmount;
+            $balance = $balance + $row_balance;
+            $item->balance = $balance;
+            return $item;
+        });
+
+        return response()->json([
+            'data' => $ledger_account,
+            'info' => $ledger_ob_summary,
+        ], 200);
+    }
+
+    //supplier ledger
+    public function get_supplier_ledger_details(Request $request)
+    {
+        $page = $request->input('page', 1);
+        $per_page = $request->input('size') ? $request->input('size') : 10;
+
+        $location = $request->input('location');
+        $option2 = $request->input('option2');
+
+        $ledger_ob_summary = AccountOpeningBalance::select(
+            DB::raw('SUM(CASE WHEN pos_account_opening_balances.entry_type=\'D\' THEN pos_account_opening_balances.amount ELSE 0.00 END) AS OpeningDebit'),
+            DB::raw('SUM(CASE WHEN pos_account_opening_balances.entry_type=\'C\' THEN pos_account_opening_balances.amount ELSE 0.00 END) AS OpeningCredit'))
+            ->where('account_opening_balances.account_id', '=', '431')
+            ->where('account_opening_balances.account_sub_id', '=', $option2)
+            ->union(DB::table('accounts_transactions')
+                    ->select(
+                        DB::raw('SUM(CASE WHEN pos_account_ledger_entries.entry_type=\'D\' THEN pos_account_ledger_entries.amount ELSE 0.00 END) AS OpeningDebit'),
+                        DB::raw('SUM(CASE WHEN pos_account_ledger_entries.entry_type=\'C\' THEN pos_account_ledger_entries.amount ELSE 0.00 END) AS OpeningCredit'))
+                    ->leftJoin('account_ledger_entries', 'account_ledger_entries.transaction_id', '=', 'accounts_transactions.transaction_id')
+                    ->where('accounts_transactions.created_at', '<', urldecode($request->input("from")))
+                    ->where('account_ledger_entries.person_type', '=', 'S')
+                    ->where('account_ledger_entries.person_id', '=', $option2)
+                    ->where('account_ledger_entries.account_id', '=', '431'))
+
+            ->get()->pipe(function ($collection) {
+            return collect([(object) [
+                'created_at' => '',
+                'description' => 'Opening Balance',
+                'DebitAmount' => $collection->sum('OpeningDebit') ? $collection->sum('OpeningDebit') : null,
+                'CreditAmount' => $collection->sum('OpeningCredit') ? $collection->sum('OpeningCredit') : null,
+            ]]
+            );
+        });
+
+        $balance = 0;
+        $ledger_account = AccountsTransaction::select(
+            'accounts_transactions.created_at',
+            'accounts_transactions.description',
+            DB::raw('(CASE WHEN pos_account_ledger_entries.entry_type=\'D\' THEN pos_account_ledger_entries.amount ELSE NULL END) AS DebitAmount'),
+            DB::raw('(CASE WHEN pos_account_ledger_entries.entry_type=\'C\' THEN pos_account_ledger_entries.amount ELSE NULL END) AS CreditAmount'))
+            ->leftJoin('account_ledger_entries', 'account_ledger_entries.transaction_id', '=', 'accounts_transactions.transaction_id')
+            ->whereBetween('accounts_transactions.created_at', [urldecode($request->input("from")), urldecode($request->input("to"))])
+            ->where('account_ledger_entries.person_type', '=', 'S')
+            ->where('account_ledger_entries.account_id', '=', '431')
+            ->where('account_ledger_entries.person_id', '=', $option2)
             ->orderBy('accounts_transactions.created_at', 'ASC')
             ->paginate($per_page, ['*'], 'page', $page);
 

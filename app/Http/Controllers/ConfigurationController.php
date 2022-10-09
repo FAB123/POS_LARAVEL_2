@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Account\AccountHead;
+use App\Models\Account\AccountOpeningBalance;
 use App\Models\Configurations\Configuration;
 use App\Models\Configurations\DinnerTable;
 use App\Models\Configurations\StockLocation;
 use App\Models\Configurations\StoreUnit;
 use App\Models\Configurations\TaxScheme;
+use App\Models\Item\Item;
+use App\Models\Item\ItemsQuantity;
 use App\Models\PaymentOption;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -173,17 +177,43 @@ class ConfigurationController extends Controller
                     'location_vat_number' => $request->input('location_vat_number'),
                 ]);
 
+            if (!$request->input('location_id')) {
+                //update quantity of all existing Items
+                $items = Item::all()->where('stock_type', '1')->where('is_boxed', '0');
+                $account_heads = AccountHead::all();
+
+                foreach ($items as $item) {
+                    // pos_items_quantities
+                    ItemsQuantity::
+                        updateOrInsert(
+                        ['location_id' => $location['location_id'], 'item_id' => $item['item_id']],
+                        ['quantity' => 0]
+                    );
+
+                    AccountOpeningBalance::updateOrInsert(
+                        ['account_sub_id' => $item['item_id'], 'location_id' => $location['location_id'], 'account_id' => 211, 'year' => date('Y')],
+                        ['amount' => 0, 'inserted_by' => decrypt(auth()->user()->encrypted_employee)]
+                    );
+                }
+
+                foreach ($account_heads as $head) {
+                    AccountOpeningBalance::updateOrInsert(
+                        ['location_id' => $location['location_id'], 'account_id' => $head['account_id'], 'year' => date('Y')],
+                        ['amount' => 0, 'inserted_by' => decrypt(auth()->user()->encrypted_employee)]
+                    );
+                }
+            }
             $stores = StockLocation::all('location_id', 'location_name_en', 'location_name_ar');
 
             return response()->json([
                 'stores' => $stores,
                 'error' => false,
-                'message' => "store.new_store_or_update",
+                'message' => "configuration.configuration_store_saved",
             ], 200);
         } catch (\Exception$e) {
             return response()->json([
                 'error' => true,
-                'message' => "store.error_new_or_update",
+                'message' => "configuration.configuration_store_not_saved",
                 'info' => $e->getMessage(),
             ], 200);
         }
@@ -267,8 +297,6 @@ class ConfigurationController extends Controller
             'data' => $units,
         ], 200);
     }
-
-
 
     //get unit by id
     public function get_unit_by_id(Request $request)

@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::group(['namespace' => 'App\Http\Controllers'], function () {
     Route::group(['prefix' => 'v2'], function () {
-        Route::get("sendmail", 'HomeController@send_mail');
+        // Route::get("sendmail", 'HomeController@send_mail');
         // Route::post("send_text_email", 'MessageController@send_text_email');
 
         Route::group(['prefix' => 'login'], function () {
@@ -72,6 +72,11 @@ Route::group(['namespace' => 'App\Http\Controllers'], function () {
                 //search item category
                 Route::get('search_category', 'ItemController@search_category');
 
+                //get items for ob
+
+                Route::get('search_items_for_ob', 'ItemController@search_items_for_opening_balance');
+                Route::post('save_items_ob', 'ItemController@save_items_opening_balance');
+
             });
 
             //Boxed item routes
@@ -100,6 +105,7 @@ Route::group(['namespace' => 'App\Http\Controllers'], function () {
                 // Route::post('save_credit_sale', 'SalesController@save_credit_sale');
                 // Route::post('save_credit_sale_return', 'SalesController@save_credit_sale_return');
                 Route::post('get_sale', 'SalesController@get_sale');
+                Route::get('get_sales_history', 'SalesController@get_sales_history');
 
             });
 
@@ -108,6 +114,7 @@ Route::group(['namespace' => 'App\Http\Controllers'], function () {
                 Route::post('save_purchase', 'PurchaseController@save_purchase');
                 Route::post('get_purchase', 'PurchaseController@get_purchase');
                 Route::get('get_purchase_image', 'PurchaseController@get_purchase_image');
+                Route::get('get_purchase_by_id', 'PurchaseController@get_purchase_by_id');
             });
 
             //workorder rout
@@ -120,6 +127,7 @@ Route::group(['namespace' => 'App\Http\Controllers'], function () {
             Route::group(['prefix' => 'quatation'], function () {
                 Route::post('save_quatation', 'QuatationController@save_quatation');
                 Route::post('get_quatation', 'QuatationController@get_quatation');
+                Route::get('get_quatation_details', 'QuatationController@get_quatation_details');
             });
 
             //Suspended Sales routes
@@ -207,6 +215,9 @@ Route::group(['namespace' => 'App\Http\Controllers'], function () {
                 Route::get('journal_report', 'ReportController@get_general_journal');
                 Route::get('ledger_accounts_balances', 'ReportController@get_ledger_accounts_balances');
                 Route::get('ledger_details', 'ReportController@get_ledger_details');
+
+                Route::get('customer_ledger_details', 'ReportController@get_customer_ledger_details');
+                Route::get('supplier_ledger_details', 'ReportController@get_supplier_ledger_details');
 
                 Route::get('trail_balance', 'ReportController@get_trail_balance');
 

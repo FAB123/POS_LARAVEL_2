@@ -22,6 +22,7 @@ class CreatePurchaseItemsTable extends Migration
             $table->string('serialnumber', 30)->nullable();
             $table->double('purchase_quantity', 15, 3)->nullable();
             $table->double('item_cost_price', 15, 3)->nullable();
+            $table->double('item_sub_total', 15, 3)->nullable();
             $table->double('discount', 15, 3)->default(0.000)->nullable();
             $table->enum('discount_type', ['C', 'P'])->nullable();
             $table->unsignedBigInteger('location_id')->index();

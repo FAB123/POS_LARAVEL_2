@@ -23,7 +23,7 @@ class CreateEmployeesTable extends Migration
             $table->string('mobile', 255);
             $table->string('email', 255);
             $table->string('comments', 255)->nullable();
-            $table->boolean('lang')->default(1)->comment('1 : en, 0: ar');
+            $table->enum('lang', ['en', 'ar', 'ur'])->default('en');
             $table->boolean('status')->default(1)->comment('1 : Active, 0: Disabled');
             $table->softDeletes();
             $table->timestamps();

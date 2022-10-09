@@ -33,7 +33,7 @@ class CustomerController extends Controller
         $per_page = $request->input('size') ? $request->input('size') : 10;
 
         // $total = $query->count();
-        $result = $query->paginate($per_page, ['*'], 'page', $page);
+        $result = $query->with(['details'])->paginate($per_page, ['*'], 'page', $page);
 
         return response()->json([
             'data' => $result,
@@ -54,6 +54,7 @@ class CustomerController extends Controller
     {
         try {
             DB::beginTransaction();
+            $location_id = $request->header('Store');
             $saved_customer = Customer::updateOrCreate([
                 'customer_id' => $request->input('customerId') ? decrypt($request->input('customerId')) : null,
             ],
@@ -86,12 +87,14 @@ class CustomerController extends Controller
                 AccountOpeningBalance::where('account_sub_id', $saved_customer->customer_id)
                     ->where('account_id', 241)
                     ->where('year', date('Y'))
+                    ->where('location_id', $location_id)
                     ->update(['amount' => $request->input('opening_balance'), 'inserted_by' => decrypt(auth()->user()->encrypted_employee)]);
             } else {
                 AccountOpeningBalance::insert([
                     'account_id' => 241,
                     'account_sub_id' => $saved_customer->customer_id,
                     'amount' => $request->input('opening_balance'),
+                    'location_id' => $location_id,
                     'inserted_by' => decrypt(auth()->user()->encrypted_employee),
                     'year' => date('Y'),
                 ]);

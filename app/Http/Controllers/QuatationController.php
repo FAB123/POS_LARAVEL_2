@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Configurations\StoreUnit;
+use App\Models\Customer\Customer;
+use App\Models\Item\ItemsQuantity;
+use App\Models\Item\ItemsTax;
 use App\Models\Quotations\Quotation;
 use App\Models\Quotations\QuotationsItem;
 use App\Models\Quotations\QuotationsItemsTax;
@@ -158,6 +162,93 @@ class QuatationController extends Controller
             return $quotation;
         } else {
             return false;
+        }
+    }
+
+    //get Quatation Details
+    public function get_quatation_details(Request $request)
+    {
+        $quatation_id = $request->input('id');
+        if ($quatation_id) {
+            $location_id = $request->header('Store');
+            //update quatation status
+            $quatation_sale = Quotation::find($quatation_id);
+            $quatation_sale->status = 1;
+            $quatation_sale->save();
+            $customer_id = $quatation_sale->customer_id;
+
+            $items = QuotationsItem::with(['details'])
+                ->where('quotation_id', $quatation_id)
+                ->get();
+            $new_item = $items->map(function ($item) use ($location_id) {
+                $item_taxs = ItemsTax::find($item->item_id)->get();
+                $sub_total = $item->item_sub_total;
+                $total = 0;
+                $total_percent = 0;
+                $total_tax = 0;
+                $tax_details = $item_taxs->map(function ($item_tax) use ($sub_total, &$total, &$total_percent, &$total_tax) {
+                    $tax_fraction = $item_tax->percent / 100;
+                    $tax_amount = number_format($sub_total * $tax_fraction, 2);
+                    $total += $sub_total + $tax_amount;
+                    $total_percent += $item_tax->percent;
+                    $total_tax += $tax_amount;
+                    return [
+                        "tax_name" => $item_tax->tax_name,
+                        "percent" => $item_tax->percent,
+                        "amount" => $tax_amount,
+                    ];
+                });
+
+                //fine tune it
+                $unit = StoreUnit::find($item->details->unit_type);
+                $stock = ItemsQuantity::where('location_id', $location_id)
+                    ->find($item->item_id);
+
+                return [
+                    "item_id" => $item->item_id,
+                    "item_name" => $item->details->item_name,
+                    "item_name_ar" => $item->details->item_name_ar,
+                    "unit_price" => $item->item_unit_price,
+                    "cost_price" => $item->details->cost_price,
+                    "quantity" => $item->quotation_quantity,
+                    "discount" => $item->discount,
+                    "discount_type" => $item->discount_type,
+                    "unit" => "{$unit->unit_name_en} - {$unit->unit_name_ar}",
+                    "subTotal" => $item->item_sub_total,
+                    "allowdesc" => $item->details->allowdesc,
+                    "is_serialized" => $item->details->is_serialized,
+                    "minimum_price" => $item->details->minimum_price,
+                    "stock_type" => $item->details->stock_type,
+                    "is_boxed" => $item->details->is_boxed,
+                    "vatList" => $tax_details,
+                    "vat" => "{$total_tax} [{$total_percent}%]",
+                    "total" => $total,
+                    "vatPercentage" => $total_percent,
+                    "stock" => $stock->quantity,
+                ];
+            });
+
+            $data = [
+                'customerInfo' => $customer_id ? Customer::with(['details', 'opening_balance'])->find($customer_id)->makeVisible('customer_id') : null,
+                'cartItems' => $new_item,
+            ];
+
+            if ($items) {
+                return response()->json([
+                    'status' => true,
+                    'data' => $data,
+                ], 200);
+            } else {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'sales.no_invoice_number',
+                ], 200);
+            }
+        } else {
+            return response()->json([
+                'error' => true,
+                'message' => 'sales.no_invoice_number',
+            ], 200);
         }
     }
 }

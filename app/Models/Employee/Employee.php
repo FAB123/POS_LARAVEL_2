@@ -14,12 +14,12 @@ class Employee extends Model
 
     protected $guarded = [];
     protected $primaryKey = 'employee_id';
-    protected $hidden = ['password', 'remember_token', 'employee_id', 'username', 'created_at', 'updated_at', 'deleted_at'];
+    protected $hidden = ['password', 'remember_token', 'employee_id', 'created_at', 'updated_at', 'deleted_at'];
 
-    public function getStatusFormatedAttribute()
-    {
-        return ($this->status == 0) ? 'Blocked' : 'Active';
-    }
+    // public function getStatusFormatedAttribute()
+    // {
+    //     return ($this->status == 0) ? 'Blocked' : 'Active';
+    // }
 
     public function getEncryptedEmployeeAttribute()
     {
@@ -32,5 +32,5 @@ class Employee extends Model
     //     return $query->where('status', 1);
     // }
 
-    protected $appends = ['status_formated', 'encrypted_employee'];
+    protected $appends = ['encrypted_employee'];
 }

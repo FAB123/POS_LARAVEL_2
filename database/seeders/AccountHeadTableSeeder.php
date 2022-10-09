@@ -159,7 +159,7 @@ class AccountHeadTableSeeder extends Seeder
             ],
             [
                 'account_id' => '449',
-                'account_name' => 'VAT Payable',
+                'account_name' => 'VAT',
                 'account_type' => 3,
                 'editable' => 0,
                 'inserted_by' => 1,
