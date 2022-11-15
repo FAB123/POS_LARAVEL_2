@@ -24,8 +24,11 @@ class CreatePurchasesTable extends Migration
             $table->string('reference', 32)->nullable();
             $table->double('sub_total', 15, 3);
             $table->double('tax', 15, 3);
+            $table->double('discount', 15, 3);
             $table->double('total', 15, 3);
             $table->string('comments', 255)->nullable();
+            $table->unsignedBigInteger('location_id')->index();
+            $table->foreign('location_id')->references('location_id')->on('stock_locations');
             $table->timestamps();
         });
     }

@@ -11,6 +11,7 @@ use App\Models\Inventory;
 use App\Models\Item\Item;
 use App\Models\Item\ItemsQuantity;
 use App\Models\Item\ItemsTax;
+use App\Models\PurchasePayment;
 use App\Models\Purchase\Purchase;
 use App\Models\Purchase\PurchaseItem;
 use App\Models\Purchase\PurchaseItemsTaxes;
@@ -41,15 +42,29 @@ class PurchaseController extends Controller
             Storage::disk('public')->put('purchase_bills/' . $imageName, base64_decode($image), 'public');
         }
 
+        if ($purchase_type == 'CAP' || $purchase_type == 'CRP') {
+            $sub_total = $payment_info['subtotal'];
+            $tax = $payment_info['tax'];
+            $discount = $payment_info['discount'];
+            $total = $payment_info['total'];
+        } else {
+            $sub_total = $payment_info['subtotal'] * -1;
+            $tax = $payment_info['tax'] * -1;
+            $discount = $payment_info['discount'] * -1;
+            $total = $payment_info['total'] * -1;
+        }
+
         $purchase_data = array(
             'supplier_id' => $supplier_info ? $supplier_info["supplier_id"] : null,
             'employee_id' => decrypt(auth()->user()->encrypted_employee),
             'purchase_type' => $purchase_type,
-            'sub_total' => $payment_info['subtotal'],
-            'tax' => $payment_info['tax'],
-            'total' => $payment_info['total'],
+            'sub_total' => $sub_total,
+            'discount' => $discount,
+            'tax' => $tax,
+            'total' => $total,
             'comments' => $request->input('comments'),
             'reference' => $request->input('reference'),
+            'location_id' => $store_id,
         );
 
         isset($imageName) && $purchase_data['pic_filename'] = $imageName;
@@ -61,7 +76,6 @@ class PurchaseController extends Controller
 
             if ($purchase->purchase_id) {
                 //db transaction starting
-
                 $item_list = [];
                 $item_tax_list = [];
                 $inventory_list = [];
@@ -94,16 +108,28 @@ class PurchaseController extends Controller
                         $this->calculate_avarage_cost($item['item_id'], $store_id, $item['cost_price'], $item['quantity'], $cur_item_info->cost_price);
                     }
 
+                    if ($purchase_type == 'CAP' || $purchase_type == 'CRP') {
+                        $purchase_quantity = $item['quantity'];
+                        $item_cost_price = bcmul($item['cost_price'], $item['quantity']);
+                        $item_discount = $item['discount'];
+                        $item_sub_total = $item['subTotal'];
+                    } else {
+                        $purchase_quantity = $item['quantity'] * -1;
+                        $item_cost_price = bcmul($item['cost_price'], bcmul($item['quantity'], -1));
+                        $item_discount = $item['discount'] * -1;
+                        $item_sub_total = $item['subTotal'] * -1;
+                    }
+
                     //set item list for sales item
                     $item_list[] = [
                         'purchase_id' => $purchase->purchase_id,
                         'item_id' => $item['item_id'],
                         'description' => isset($item['description']) ? $item['description'] : null,
                         'serialnumber' => isset($item['serial']) ? $item['serial'] : null,
-                        'purchase_quantity' => $item['quantity'],
-                        'item_cost_price' => $item['cost_price'],
-                        'item_sub_total' => $item['subTotal'],
-                        'discount' => $item['discount'],
+                        'purchase_quantity' => $purchase_quantity,
+                        'item_cost_price' => $item_cost_price,
+                        'item_sub_total' => $item_sub_total,
+                        'discount' => $item_discount,
                         'discount_type' => $item['discount_type'],
                         'location_id' => $store_id,
                     ];
@@ -111,13 +137,19 @@ class PurchaseController extends Controller
                     $line = 0;
                     foreach ($item['vatList'] as $vat) {
                         $line++;
+
+                        if ($purchase_type == 'CAP' || $purchase_type == 'CRP') {
+                            $vat_amount = $vat['amount'];
+                        } else {
+                            $vat_amount = $vat['amount'] * -1;
+                        }
                         $item_tax_list[] = [
                             'purchase_id' => $purchase->purchase_id,
                             'item_id' => $item['item_id'],
                             'line' => $line,
                             'tax_name' => $vat['tax_name'],
                             'percent' => $vat['percent'],
-                            'amount' => $vat['amount'],
+                            'amount' => $vat_amount,
                         ];
                     }
                 }
@@ -131,9 +163,29 @@ class PurchaseController extends Controller
                     ], 200);
                 }
 
+                if ($purchase_type == 'CAP' || $purchase_type == 'CAPR') {
+                    if (count($payment_info['payment']) > 0) {
+                        //inserting payment details
+                        $payment_details = [];
+                        foreach ($payment_info['payment'] as $payment) {
+                            $payment_details[] = [
+                                'purchase_id' => $purchase->purchase_id,
+                                'payment_id' => $payment['payment_id'],
+                                'amount' => $payment['amount'],
+                            ];
+                        }
+
+                        PurchasePayment::insert($payment_details);
+                    }
+                }
+
                 PurchaseItem::insert($item_list);
                 PurchaseItemsTaxes::insert($item_tax_list);
-                Inventory::insert($inventory_list);
+                // Inventory::insert($inventory_list);
+                foreach ($inventory_list as $inventory) {
+                    Inventory::create($inventory);
+                }
+
                 DB::commit();
 
                 return response()->json([
@@ -152,9 +204,8 @@ class PurchaseController extends Controller
         }
     }
 
-    public function get_purchase_image(Request $request)
+    public function get_purchase_image($purchase_id)
     {
-        $purchase_id = $request->input('purchase_id');
         $purchase = Purchase::find($purchase_id);
         $pic_filename = $purchase->pic_filename ? asset('storage/purchase_bills/' . $purchase->pic_filename) : null;
         return response()->json([
@@ -163,9 +214,8 @@ class PurchaseController extends Controller
         ], 200);
     }
 
-    public function get_purchase_by_id(Request $request)
+    public function get_purchase_by_id(Request $request, $purchase_id)
     {
-        $purchase_id = $request->input('id');
         if ($purchase_id) {
             $location_id = $request->header('Store');
             $purchases = Purchase::find($purchase_id);
@@ -173,7 +223,7 @@ class PurchaseController extends Controller
 
             $items = PurchaseItem::with(['details'])->where('purchase_id', $purchase_id)->get();
             $new_item = $items->map(function ($item) use ($location_id) {
-                $item_taxs = ItemsTax::find($item->item_id)->get();
+                $item_taxs = ItemsTax::where('item_id', $item->item_id)->get();
                 $sub_total = $item->item_sub_total;
                 $total = 0;
                 $total_percent = 0;

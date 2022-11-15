@@ -19,11 +19,14 @@ class CreateCustomersTable extends Migration
             $table->string('mobile', 255)->nullable();
             $table->string('email', 255)->nullable();
             $table->string('company_name', 100)->nullable();
-            $table->string('vat_number', 20)->nullable();
+            $table->enum('identity_type', ['PAS', 'IQA', 'TIN', 'CRN', 'GCC', 'MOM', 'SAG', 'NAT'])->index();
+            $table->string('party_id', 30)->nullable();
             $table->integer('payment_type')->nullable();
             $table->integer('customer_type')->nullable()->comment('1 : Wholesale, 0: Retail');
-            $table->boolean('taxable')->default(1)->comment('1 : Active, 0: Disabled');
+            // $table->boolean('taxable')->default(1)->comment('1 : Active, 0: Disabled');
             $table->boolean('status')->default(1)->comment('1 : Active, 0: Disabled');
+            $table->unsignedBigInteger('location_id');
+            $table->foreign('location_id')->references('location_id')->on('stock_locations');
             $table->softDeletes();
             $table->timestamps();
         });

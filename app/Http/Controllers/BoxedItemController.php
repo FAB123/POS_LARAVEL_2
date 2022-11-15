@@ -12,11 +12,10 @@ use Illuminate\Support\Facades\Storage;
 
 class BoxedItemController extends Controller
 {
-    public function getAll(Request $request)
+    public function getAll(Request $request, $page, $size, $keyword, $sortitem, $sortdir)
     {
         $query = Item::query();
-        if ($request->input('keyword') != 'null') {
-            $keyword = $request->input('keyword');
+        if ($keyword != 'null') {
             $query->whereRaw("name LIKE '%" . $keyword . "%'")
                 ->orWhereRaw("name_ar LIKE '%" . $keyword . "%'")
                 ->orWhereRaw("category LIKE '%" . $keyword . "%'")
@@ -25,12 +24,11 @@ class BoxedItemController extends Controller
                 ->orWhereRaw("comments LIKE '%" . $keyword . "%'");
         }
 
-        if ($request->input('sortitem') != 'null') {
-            $query->orderBy($request->input('sortitem'), $request->input('sortdir'));
+        if ($sortitem != 'null') {
+            $query->orderBy($sortitem, $sortdir);
         }
 
-        $page = $request->input('page', 1);
-        $per_page = $request->input('size') ? $request->input('size') : 10;
+        $per_page = $size ? $size : 10;
 
         $result = $query->boxeditems()->paginate($per_page, ['*'], 'page', $page);
 
@@ -110,12 +108,12 @@ class BoxedItemController extends Controller
     }
 
     //get boxed item by id
-    public function get_item_by_id(Request $request)
+    public function get_item_by_id(Request $request, $item_id)
     {
-        $item_id = decrypt($request->input('item'));
-        $item = Item::with(['vat_list', 'boxed_items'])->find($item_id);
+        $decrypted_item_id = decrypt($item_id);
+        $item = Item::with(['vat_list', 'boxed_items'])->find($decrypted_item_id);
 
-        $item_quantity = ItemsQuantity::where('location_id', $request->input('store'))->find($item_id);
+        $item_quantity = ItemsQuantity::where('location_id', $request->input('store'))->find($decrypted_item_id);
         $item['item_quantity'] = $item_quantity ? $item_quantity->quantity : "0.00";
         $item['pic_filename'] = $item->pic_filename ? asset('storage/item_img/' . $item->pic_filename) : null;
 

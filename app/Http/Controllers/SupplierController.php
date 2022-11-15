@@ -11,29 +11,23 @@ use Illuminate\Support\Facades\DB;
 class SupplierController extends Controller
 {
     //get all supplier from table with pagination
-    public function getAll(Request $request)
+    public function getAll($page, $size = 10, $keyword, $sortitem, $sortdir)
     {
-        $query = Supplier::query();
-        if ($request->input('keyword') != 'null') {
-            $keyword = $request->input('keyword');
-            $query->whereRaw("name LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("address_line_1 LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("email LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("city LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("company_name LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("account_number LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("vat_number LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("mobile LIKE '%" . $keyword . "%'");
+        $result = Supplier::select('suppliers.supplier_id as supplier_id', 'suppliers.*')
+            ->join('supplier_details', 'suppliers.supplier_id', 'supplier_details.supplier_id')
+            ->when($keyword != 'null', function ($query) use ($keyword) {
+                $query->whereRaw("name LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("address_line_1 LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("email LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("city LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("contact_person LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("account_number LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("vat_number LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("mobile LIKE '%" . $keyword . "%'");
+            })->when($sortitem != 'null', function ($query) use ($sortitem, $sortdir) {
+            $query->orderBy($sortitem, $sortdir);
         }
-
-        if ($request->input('sortitem') != 'null') {
-            $query->orderBy($request->input('sortitem'), $request->input('sortdir'));
-        }
-
-        $page = $request->input('page', 1);
-        $per_page = $request->input('size') ? $request->input('size') : 10;
-
-        $result = $query->with(['details'])->paginate($per_page, ['*'], 'page', $page);
+        )->paginate($size, ['*'], 'page', $page);
 
         return response()->json([
             'data' => $result,
@@ -136,9 +130,9 @@ class SupplierController extends Controller
     }
 
     //get Supplier by id
-    public function get_supplier_by_id(Request $request)
+    public function get_supplier_by_id($supplier_id)
     {
-        $supplier = Supplier::with('details', 'opening_balance')->find(decrypt($request->input('supplier')))->makeVisible('supplier_id');
+        $supplier = Supplier::with('details', 'opening_balance')->find(decrypt($supplier_id))->makeVisible('supplier_id');
         return response()->json([
             'auth' => true,
             'data' => $supplier,
@@ -146,10 +140,9 @@ class SupplierController extends Controller
     }
 
     //search_SUPPLIERS by item name
-    public function search_suppliers(Request $request)
+    public function search_suppliers($keyword)
     {
         $query = Supplier::query();
-        $keyword = $request->input('query');
         $query->whereRaw("name LIKE '%" . $keyword . "%'")
             ->orWhereRaw("mobile LIKE '%" . $keyword . "%'")
             ->orWhereRaw("email LIKE '%" . $keyword . "%'");

@@ -9,11 +9,11 @@ use Illuminate\Http\Request;
 
 class EmployeeController extends Controller
 {
-    public function getAll(Request $request)
+    public function getAll(Request $request, $page, $size, $keyword, $sortitem, $sortdir)
     {
         $query = Employee::query();
-        if ($request->input('keyword') != 'null') {
-            $keyword = $request->input('keyword');
+        if ($keyword != 'null') {
+
             $query->whereRaw("name LIKE '%" . $keyword . "%'")
                 ->orWhereRaw("address_line_1 LIKE '%" . $keyword . "%'")
                 ->orWhereRaw("email LIKE '%" . $keyword . "%'")
@@ -21,12 +21,11 @@ class EmployeeController extends Controller
                 ->orWhereRaw("mobile LIKE '%" . $keyword . "%'");
         }
 
-        if ($request->input('sortitem') != 'null') {
-            $query->orderBy($request->input('sortitem'), $request->input('sortdir'));
+        if ($sortitem != 'null') {
+            $query->orderBy($sortitem, $sortdir);
         }
 
-        $page = $request->input('page', 1);
-        $per_page = $request->input('size') ? $request->input('size') : 10;
+        $per_page = $size ? $size : 10;
 
         // $total = $query->count();
         $result = $query->paginate($per_page, ['*'], 'page', $page);
@@ -39,17 +38,15 @@ class EmployeeController extends Controller
     public function get_all_employees_list(Request $request)
     {
         $result = Employee::select('name', 'email', 'employee_id as account_id')->get()->makeVisible('employee_id')->toArray();
-
         return response()->json([
             'data' => $result,
         ], 200);
     }
 
     //search_employees by  name
-    public function search_employees(Request $request)
+    public function search_employees($keyword)
     {
         $query = Employee::query();
-        $keyword = $request->input('query');
         $query->whereRaw("name LIKE '%" . $keyword . "%'")
             ->orWhereRaw("mobile LIKE '%" . $keyword . "%'")
             ->orWhereRaw("email LIKE '%" . $keyword . "%'");
@@ -63,20 +60,28 @@ class EmployeeController extends Controller
     }
 
     //get employee by id
-    public function get_employee_by_id(Request $request)
+    public function get_employee_by_id($employee_id)
     {
-        $employee = Employee::find(decrypt($request->input('employee')));
-        $employee->makeVisible('username')->toArray();
-        //$employee['status'] = ($employee['status'] === 1) ? true : false;
-        $employee['permissions'] = $this->convert_permissions_for_edit(decrypt($request->input('employee')));
+        try {
+            $decrypted_employee_id = decrypt($employee_id);
+            $employee = Employee::find($decrypted_employee_id);
+            $employee->makeVisible('username')->toArray();
+            $employee['permissions'] = $this->convert_permissions_for_edit($decrypted_employee_id);
 
-        return response()->json([
-            'data' => $employee,
-        ], 200);
+            return response()->json([
+                'status' => true,
+                'data' => $employee,
+            ], 200);
+        } catch (\Exception$e) {
+            return response()->json([
+                'status' => false,
+                'info' => $e->getMessage(),
+            ], 200);
+        }
     }
 
     //get new User Permissions
-    public function get_new_employee()
+    public function get_default_permissions()
     {
         $permissions = $this->convert_permissions_for_edit();
         return response()->json([

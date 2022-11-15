@@ -1,4 +1,5 @@
 <?php
+namespace App\helpers;
 
 class GenerateTVL
 {
@@ -13,15 +14,19 @@ class GenerateTVL
         return \Carbon\Carbon::createFromFormat('Y-m-d', $date)->format($date_format);
     }
 
-    public function generate($company, $vat_no, $trans_time, $total, $vat_amount)
+    // var_dump(bin2hex('Ahmed Mohamed AL Ahmady'));
+
+    public function generate($tags)
     {
-        $generatedString = ([
-            $this->toString(1, $this->getLength($company), $company),
-            $this->toString(2, $this->getLength($vat_no), $vat_no),
-            $this->toString(3, $this->getLength($trans_time), $trans_time),
-            $this->toString(4, $this->getLength($total), $total),
-            $this->toString(5, $this->getLength($vat_amount), $vat_amount),
-        ]);
+        $generatedString = [];
+        $tag_count = 1;
+        foreach ($tags as $tag) {
+            $generatedString[] = $this->toString($tag_count, $this->getLength($tag), $tag);
+            // $generatedString[] = pack("H*", sprintf("%02X", (string) "$tag")) .
+            // pack("H*", sprintf("%02X", strlen((string) "$tag"))) .
+            // (string) "$tag";
+            $tag_count++;
+        }
         return ($this->toBase64($generatedString));
     }
 
@@ -40,10 +45,10 @@ class GenerateTVL
         return pack("H*", sprintf("%02X", $value));
     }
 
-    protected function toHexValue($value)
-    {
-        return unpack("H*", $value)[1];
-    }
+    // protected function toHexValue($value)
+    // {
+    //     return unpack("H*", $value)[1];
+    // }
 
     public function toTLV($generatedString): string
     {

@@ -10,30 +10,24 @@ use Illuminate\Support\Facades\DB;
 
 class CustomerController extends Controller
 {
-    public function getAll(Request $request)
+    public function get_all_customers($page, $size = 10, $keyword, $sortitem, $sortdir)
     {
-        $query = Customer::query();
-        if ($request->input('keyword') != 'null') {
-            $keyword = $request->input('keyword');
-            $query->whereRaw("name LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("address_line_1 LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("email LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("city LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("company_name LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("account_number LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("vat_number LIKE '%" . $keyword . "%'")
-                ->orWhereRaw("mobile LIKE '%" . $keyword . "%'");
+        $result = Customer::select('customers.customer_id as customer_id', 'customers.*', 'stock_locations.location_name_en', 'stock_locations.location_name_ar', 'customer_details.comments')
+            ->join('customer_details', 'customers.customer_id', 'customer_details.customer_id')
+            ->join('stock_locations', 'customers.location_id', 'stock_locations.location_id')
+            ->when($keyword != 'null', function ($query) use ($keyword) {
+                $query->whereRaw("name LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("address_line_1 LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("email LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("city LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("company_name LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("account_number LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("vat_number LIKE '%" . $keyword . "%'")
+                    ->orWhereRaw("mobile LIKE '%" . $keyword . "%'");
+            })->when($sortitem != 'null', function ($query) use ($sortitem, $sortdir) {
+            $query->orderBy($sortitem, $sortdir);
         }
-
-        if ($request->input('sortitem') != 'null') {
-            $query->orderBy($request->input('sortitem'), $request->input('sortdir'));
-        }
-
-        $page = $request->input('page', 1);
-        $per_page = $request->input('size') ? $request->input('size') : 10;
-
-        // $total = $query->count();
-        $result = $query->with(['details'])->paginate($per_page, ['*'], 'page', $page);
+        )->paginate($size, ['*'], 'page', $page);
 
         return response()->json([
             'data' => $result,
@@ -63,11 +57,11 @@ class CustomerController extends Controller
                     'mobile' => $request->input('mobile'),
                     'email' => $request->input('email'),
                     'company_name' => $request->input('company_name'),
-                    'vat_number' => $request->input('vat_number'),
-                    'payment_type' => $request->input('payment_type'),
+                    'identity_type' => $request->input('identity_type'),
+                    'party_id' => $request->input('party_id'),
                     'customer_type' => $request->input('customer_type'),
+                    'location_id' => $location_id,
                     'status' => 1,
-                    'taxable' => $request->input('taxable'),
                 ]);
 
             //update or insert customere details
@@ -75,9 +69,13 @@ class CustomerController extends Controller
                 'customer_id' => $saved_customer->customer_id,
             ], [
                 'city' => $request->input('city'),
-                'state' => $request->input('state'),
+                'city_sub_division' => $request->input('city_sub_division'),
+                'street' => $request->input('street'),
+                'additional_street' => $request->input('additional_street'),
+                'building_number' => $request->input('building_number'),
+                'plot_identification' => $request->input('plot_identification'),
+                // 'state' => $request->input('state'),
                 'zip' => $request->input('zip'),
-                'address_line_1' => $request->input('address_line_1'),
                 'comments' => $request->input('comments'),
                 'account_number' => $request->input('account_number'),
             ]);
@@ -137,20 +135,12 @@ class CustomerController extends Controller
     }
 
     //get customer by id
-    public function get_customer_by_id(Request $request)
+    public function get_customer_by_id(Request $request, $customer_id)
     {
-        // $customer = DB::table('customers')
-        //     ->select('customers.customer_id as customer_id', 'customers.name', 'customers.mobile',
-        //         'customers.email', 'customers.company_name', 'customers.vat_number',
-        //         'customers.payment_type', 'customers.customer_type', 'customers.taxable',
-        //         'customers.status', 'customers.created_at', 'customers.updated_at')
-        //     ->leftJoin('customer_details', 'customers.customer_id', '=', 'customer_details.customer_id')
-        //     ->leftJoin('account_opening_balances', 'customers.customer_id', '=', 'account_opening_balances.account_sub_id')
-        //     ->where('customer_id', decrypt($request->input('customer')))
-        //     ->get()
-        //     ->makeVisible('customer_id');
-
-        $customer = Customer::with('details', 'opening_balance')->find(decrypt($request->input('customer')))->makeVisible('customer_id');
+        $customer = Customer::join('customer_details', 'customers.customer_id', 'customer_details.customer_id')
+            ->join('stock_locations', 'customers.location_id', 'stock_locations.location_id')
+            ->with('opening_balance')->find(decrypt($customer_id))->makeVisible('customer_id');
+        // $customer = Customer::with('details', 'opening_balance')->find(decrypt($customer_id))->makeVisible('customer_id');
         return response()->json([
             'auth' => true,
             'data' => $customer,
@@ -158,10 +148,9 @@ class CustomerController extends Controller
     }
 
     //search_customers by item name
-    public function search_customers(Request $request)
+    public function search_customers(Request $request, $keyword)
     {
         $query = Customer::query();
-        $keyword = $request->input('query');
         $query->whereRaw("name LIKE '%" . $keyword . "%'")
             ->orWhereRaw("mobile LIKE '%" . $keyword . "%'")
             ->orWhereRaw("email LIKE '%" . $keyword . "%'")
@@ -179,6 +168,7 @@ class CustomerController extends Controller
     public function bulk_insert(Request $request)
     {
         $failed_data = array();
+        $location_id = $request->header('Store');
         foreach ($request->input() as $data) {
             try {
                 $saved_customer = Customer::Create([
@@ -186,11 +176,11 @@ class CustomerController extends Controller
                     'mobile' => isset($data['mobile']) ? $data['mobile'] : null,
                     'email' => isset($data['email']) ? $data['email'] : null,
                     'company_name' => isset($data['company_name']) ? $data['company_name'] : null,
-                    'vat_number' => isset($data['vat_number']) ? $data['vat_number'] : null,
+                    'vat_number' => isset($data['vat']) ? $data['vat'] : null,
                     'payment_type' => isset($data['payment_type']) ? $data['payment_type'] : null,
-                    'customer_type' => isset($data['customer_type']) ? $data['customer_type'] : null,
+                    'customer_type' => isset($data['customer_type']) ? $data['customer_type'] : 0,
                     'status' => 1,
-                    'taxable' => isset($data['taxable']) ? $data['taxable'] : null,
+                    'taxable' => isset($data['taxable']) ? $data['taxable'] : 1,
                 ]);
 
                 if ($saved_customer->customer_id) {
@@ -204,8 +194,18 @@ class CustomerController extends Controller
                         'comments' => isset($data['comments']) ? $data['comments'] : null,
                         'account_number' => isset($data['account_number']) ? $data['account_number'] : null,
                     ]);
+
+                    AccountOpeningBalance::insert([
+                        'account_id' => 241,
+                        'account_sub_id' => $saved_customer->customer_id,
+                        'amount' => 0,
+                        'location_id' => $location_id,
+                        'inserted_by' => decrypt(auth()->user()->encrypted_employee),
+                        'year' => date('Y'),
+                    ]);
                 }
             } catch (\Exception$e) {
+                info($e);
                 $failed_data[] = $data;
             }
         }

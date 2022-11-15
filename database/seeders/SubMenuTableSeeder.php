@@ -118,6 +118,10 @@ class SubMenuTableSeeder extends Seeder
             ],
             [
                 'menu_id' => 'sales',
+                'permission_id' => 'e_invoice',
+            ],
+            [
+                'menu_id' => 'sales',
                 //'submenu_label' => 'quotation',
                 'permission_id' => 'quotation',
             ],

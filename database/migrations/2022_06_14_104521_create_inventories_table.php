@@ -23,6 +23,7 @@ class CreateInventoriesTable extends Migration
             $table->unsignedBigInteger('location_id');
             $table->foreign('location_id')->references('location_id')->on('stock_locations');
             $table->double('quantity', 15, 3);
+            $table->timestamps();
         });
     }
 

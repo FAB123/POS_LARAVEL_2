@@ -67,7 +67,7 @@ return [
     |
      */
 
-    //'timezone' => 'UTC',
+    // 'timezone' => 'UTC',
     'timezone' => 'Asia/Qatar',
 
     /*
@@ -162,7 +162,7 @@ return [
         Illuminate\Translation\TranslationServiceProvider::class,
         Illuminate\Validation\ValidationServiceProvider::class,
         Illuminate\View\ViewServiceProvider::class,
-        SimpleSoftwareIO\QrCode\QrCodeServiceProvider::class,
+        // SimpleSoftwareIO\QrCode\QrCodeServiceProvider::class,
 
         /*
          * Package Service Providers...

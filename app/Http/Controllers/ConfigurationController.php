@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\GAZT\EInvoice\EGenerator;
+use App\GAZT\EInvoice\EInvoice;
+use App\GAZT\Xml\InvoiceTypeCode;
 use App\Models\Account\AccountHead;
 use App\Models\Account\AccountOpeningBalance;
 use App\Models\Configurations\Configuration;
@@ -9,59 +12,44 @@ use App\Models\Configurations\DinnerTable;
 use App\Models\Configurations\StockLocation;
 use App\Models\Configurations\StoreUnit;
 use App\Models\Configurations\TaxScheme;
+use App\Models\GaztData;
 use App\Models\Item\Item;
 use App\Models\Item\ItemsQuantity;
 use App\Models\PaymentOption;
+use Error;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str as Str;
 
 class ConfigurationController extends Controller
 {
     public function getConfigDatas()
     {
-        $configuration_data = Configuration::all()->map(function ($item) {
-            return [$item['key'] => $item['value']];
-        });
+        try {
+            $configuration_data = Configuration::all()->map(function ($item) {
+                return [$item['key'] => $item['value']];
+            });
 
-        $tax_scheme = TaxScheme::all();
-        return response()->json([
-            'configuration_data' => $configuration_data->flatMap(function ($item) {return $item;})->all(),
-            'tax_scheme' => $tax_scheme,
-        ], 200);
+            $tax_scheme = TaxScheme::all();
+            return response()->json([
+                'configuration_data' => $configuration_data->flatMap(function ($item) {return $item;})->all(),
+                'tax_scheme' => $tax_scheme,
+                'status' => true,
+            ], 200);
+        } catch (\Exception$e) {
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage(),
+            ], 200);
+        }
     }
 
     //save store config
     public function save_configuration(Request $request)
     {
-        // $configurations = [
-        //     'company_name' => $request->input('companyname'),
-        //     'company_name_ar' => $request->input('companyname_ar'),
-        //     'company_address' => $request->input('address'),
-        //     'company_address_ar' => $request->input('address_ar'),
-        //     'return_policy' => $request->input('return_policy'),
-        //     'return_policy_ar' => $request->input('return_policy_ar'),
-        //     'vat_number' => $request->input('vat_number'),
-        //     'company_email' => $request->input('email'),
-        //     'company_telephone' => $request->input('telephone'),
-        //     'include_tax' => $request->input('include_tax'),
-        //     'company_fiscal_year_start' => $request->input('financial_year'),
-        //     'application_lang' => $request->input('language'),
-        //     'currency_symbol' => $request->input('currency_symbol'),
-        //     'barcode_billing' => $request->input('barcode_billing'),
-        //     //'api_provider' => $request->input('api_provider'),
-        //     'sms_api_sender_id' => $request->input('sms_api_sender_id'),
-        //     'sms_api_username' => $request->input('sms_api_username'),
-        //     'sms_api_password' => $request->input('sms_api_password'),
-        //     'email_api_username' => $request->input('smtp_username'),
-        //     'email_api_password' => $request->input('smtp_password'),
-        //     'email_smtp_server' => $request->input('smtp_server'),
-        //     'email_smtp_port' => $request->input('smtp_port'),
-        //     'email_smtp_encryption_type' => $request->input('smtp_encryption'),
-        // ];
         $configurations = $request->all();
-
         try {
-            info($configurations);
+
             DB::beginTransaction();
             foreach ($configurations as $k => $v) {
                 if ($k != 'vatList') {
@@ -99,21 +87,21 @@ class ConfigurationController extends Controller
     }
 
     //get locations by id
-    public function get_store_by_id(Request $request)
+    public function get_store_by_id(Request $request, $location_id)
     {
-        $store = StockLocation::find($request->input("location_id"));
+        $store = StockLocation::find($location_id);
         return response()->json([
             'data' => $store,
         ], 200);
     }
 
     //delete locations by id
-    public function delete_store_by_id(Request $request)
+    public function delete_store_by_id(Request $request, $location_id)
     {
         try {
             $store = StockLocation::all()->count();
             if ($store > 1) {
-                StockLocation::find($request->input("location_id"))->delete();
+                StockLocation::find($location_id)->delete();
             } else {
                 return response()->json([
                     'status' => false,
@@ -138,10 +126,9 @@ class ConfigurationController extends Controller
     }
 
     //search branches
-    public function search_branches(Request $request)
+    public function search_branches(Request $request, $keyword)
     {
         $query = StockLocation::query();
-        $keyword = $request->input('query');
         $query->whereRaw("location_name_en LIKE '%" . $keyword . "%'")
             ->orWhereRaw("location_name_ar LIKE '%" . $keyword . "%'");
         $result = $query->get();
@@ -230,19 +217,19 @@ class ConfigurationController extends Controller
     }
 
     //get locations by id
-    public function get_table_by_id(Request $request)
+    public function get_table_by_id($table_id)
     {
-        $table = DinnerTable::find($request->input("table_id"));
+        $table = DinnerTable::find($table_id);
         return response()->json([
             'data' => $table,
         ], 200);
     }
 
     //delete locations by id
-    public function delete_table_by_id(Request $request)
+    public function delete_table_by_id($table_id)
     {
         try {
-            DinnerTable::find($request->input("table_id"))->delete();
+            DinnerTable::find($table_id)->delete();
         } catch (\Exception$e) {
             return response()->json([
                 'status' => false,
@@ -299,19 +286,19 @@ class ConfigurationController extends Controller
     }
 
     //get unit by id
-    public function get_unit_by_id(Request $request)
+    public function get_unit_by_id($unit_id)
     {
-        $units = StoreUnit::find($request->input("unit_id"));
+        $units = StoreUnit::find($unit_id);
         return response()->json([
             'data' => $units,
         ], 200);
     }
 
     //delete unit by id
-    public function delete_unit_by_id(Request $request)
+    public function delete_unit_by_id($unit_id)
     {
         try {
-            StoreUnit::find($request->input("unit_id"))->delete();
+            StoreUnit::find($unit_id)->delete();
         } catch (\Exception$e) {
             return response()->json([
                 'status' => false,
@@ -376,9 +363,9 @@ class ConfigurationController extends Controller
         ], 200);
     }
 
-    public function get_payment_option_by_id(Request $request)
+    public function get_payment_option_by_id($payment_id)
     {
-        $option = PaymentOption::find($request->input('payment_id'));
+        $option = PaymentOption::find($payment_id);
         return response()->json([
             'data' => $option,
         ], 200);
@@ -434,5 +421,305 @@ class ConfigurationController extends Controller
                 'info' => $e->getMessage(),
             ], 200);
         }
+    }
+
+    public function csid_status()
+    {
+        try {
+            $egs_data = GaztData::latest()->first();
+            return response()->json([
+                'error' => false,
+                'data' => $egs_data['activated'],
+            ], 200);
+        } catch (\Throwable$th) {
+            //throw $th;
+            return response()->json([
+                'error' => false,
+                'info' => $th->getMessage(),
+            ], 200);
+        }
+
+    }
+
+    public function generate_csid(Request $request)
+    {
+        try {
+            $otp = $request->input('otp');
+            if (!$otp) {
+                return response()->json([
+                    'error' => true,
+                    'message' => "configuration.invalid_otp",
+                ], 200);
+            } else {
+                $uuid = Str::uuid();
+                $data = $this->get_egs_data_and_validate($uuid);
+
+                $egs = new EGenerator($data);
+                $csr_keys = $egs->generateNewKeysAndCSR();
+
+                // //123345
+                $compliance_request = $egs->issueComplianceCertificate($otp);
+
+                if ($compliance_request['error']) {
+                    return response()->json([
+                        'error' => true,
+                        'info' => empty($compliance_request['info']['errors']) ? $compliance_request['info']['message'] : $compliance_request['info']['errors'],
+                        'message' => "configuration.error_creating_new_csid",
+                    ], 200);
+                } else {
+
+                    $compliance_check = $this->compliance_check($compliance_request, $csr_keys['private_key'], $egs);
+                    if (count($compliance_check['failed']) == 0) {
+                        $production_certificate = $egs->issueProductionCertificate($compliance_request['request_id']);
+                        if ($production_certificate['error']) {
+                            return response()->json([
+                                'error' => true,
+                                'info' => $production_certificate['info'],
+                                'message' => "configuration.error_creating_new_csid",
+                            ], 200);
+                        } else {
+                            //get certification data
+                            $invoice = new EInvoice(['uuid' => $uuid]);
+
+                            $cert_info = $invoice->getCertificateInfo($production_certificate['production_certificate']);
+                            //insert certificate to database
+
+                            $valid = '';
+                            foreach ($compliance_check['passed'] as $item) {
+                                $valid .= $item['type'] . ',';
+                            }
+
+                            GaztData::create([
+                                'production_certificate' => $production_certificate['production_certificate'],
+                                'production_key' => $production_certificate['production_api_secret'],
+                                'hash' => $cert_info['hash'],
+                                'issuer' => $cert_info['issuer'],
+                                'serial_number' => $cert_info['serial_number'],
+                                "private_key" => $csr_keys['private_key'],
+                                'public_key' => $cert_info['public_key'],
+                                'signature' => $cert_info['signature'],
+                                'activated' => $valid,
+                            ]);
+
+                            return response()->json([
+                                'error' => false,
+                                'table' => $compliance_check,
+                                'message' => "configuration.new_csid_generated",
+                            ], 200);
+                        }
+
+                    } else {
+                        return response()->json([
+                            'error' => true,
+                            'info' => 'some invoice failed.',
+                            'table' => $compliance_check,
+                            'message' => "configuration.new_csid_generated",
+                        ], 200);
+                    }
+                }
+            }
+        } catch (\Throwable$th) {
+            return response()->json([
+                'error' => true,
+                "info" => $th->getMessage(),
+                'message' => "configuration.error_creating_new_csid",
+            ], 200);
+        }
+
+    }
+
+    private function compliance_check($compliance_request, $private_key, $egs)
+    {
+        $compliance_result = ['passed' => [], 'failed' => []];
+
+        $invoice = new EInvoice(['uuid' => '875948375934']);
+        $cert_info = $invoice->getCertificateInfo($compliance_request['issued_certificate']);
+
+        $company_data = Configuration::find(['egs_city',
+            'egs_city_subdivision',
+            'egs_postal_zone',
+            'egs_building_number',
+            'egs_street',
+            'egs_invoice_type',
+            'egs_plot_identification',
+            'vat_number',
+            'company_name',
+            'egs_crn_number'])->pluck('value', 'key');
+
+        $invoice_data = [
+            "invoice_counter" => 1,
+            'invoice_number' => 'SME00062',
+            "previous_invoice_hash" => "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==",
+            "trans_time" => new \DateTime(),
+            'invoice_reference_commands' => 'cancel',
+            'invoice_reference' => 'SME00052',
+            "client_data" => [
+                'name' => 'FAb',
+                'street_name' => 'Ajwad Street',
+                'additional_street_name' => 'A Road',
+                'building_number' => '3353',
+                'plot_identification' => '3434',
+                'city' => 'jeddha',
+                'city_sub_division_name' => 'fgff',
+                'postal_zone' => '34534',
+                'country_subentity' => 'SA',
+                'party_identification_type' => 'NAT',
+                'party_identification_id' => '2345',
+
+            ],
+            'cart_total' => [
+                'total_without_discount' => 966,
+                'total_after_discount' => 964,
+                'total_with_vat' => 1108.90,
+                'prepaid_amount' => 0,
+                'payable_amount' => 1108.90,
+                'discount' => 2,
+                'tax_amount' => 144.90,
+            ],
+            'items' => [
+                [
+                    'item_name' => 'ALFA',
+                    'price' => 22,
+                    'tax' => 144.90,
+                    'rounding_amount' => 1110.90, //amount without discount  include tax
+                    'qty' => 44,
+                    'unit_code' => "PCE",
+                    'total_include_discount' => 966, //amount witot discount withot tax
+                ],
+            ],
+        ];
+
+        $egs_info = [
+            // 'uuid' => Str::uuid(),
+            "cert_info" => [
+                'hash' => $cert_info['hash'], //certificate hash - invoice xml parser
+                'issuer' => $cert_info['issuer'], //csid issuer - invoice xml parser
+                'serial_number' => $cert_info['serial_number'], //csid serial - invoice xml parser
+                'public_key' => $cert_info['public_key'], //csid_public_key
+                "private_key" => $private_key, //csr_private_key
+                'signature' => $cert_info['signature'], //csid_signature  - qrcode
+            ],
+            "CRN_number" => $company_data['egs_crn_number'],
+            "VAT_name" => $company_data['company_name'],
+            "VAT_number" => $company_data['vat_number'],
+            "location" => [
+                "city" => $company_data['egs_city'],
+                "city_subdivision" => $company_data['egs_city_subdivision'],
+                "street" => $company_data['egs_street'],
+                "plot_identification" => $company_data['egs_plot_identification'],
+                "building" => $company_data['egs_building_number'],
+                "postal_zone" => $company_data['egs_postal_zone'],
+                "country_subentity" => "SA",
+            ],
+            "production" => env("PRODUCTION") == '0' ? false : true,
+        ];
+
+        $EInvoice = new EInvoice($egs_info);
+        $types = [];
+        $egs_invoice_type = substr($company_data['egs_invoice_type'], 0, 2);
+        if ($egs_invoice_type == 11 || $egs_invoice_type == 01) {
+            $types[] =
+                [
+                'name' => 'SIMPIFIED INVOICE',
+                'bill_type' => InvoiceTypeCode::INVOICE,
+                'invoice_type' => InvoiceTypeCode::SIMPIFIED_TAX_INVOICE,
+            ];
+            $types[] = [
+                'name' => 'SIMPIFIED INVOICE DEBIT NOTE',
+                'bill_type' => InvoiceTypeCode::DEBIT_NOTE,
+                'invoice_type' => InvoiceTypeCode::SIMPIFIED_TAX_INVOICE,
+            ];
+            $types[] = [
+                'name' => 'SIMPIFIED INVOICE CREDIT NOTE',
+                'bill_type' => InvoiceTypeCode::CREDIT_NOTE,
+                'invoice_type' => InvoiceTypeCode::SIMPIFIED_TAX_INVOICE,
+            ];
+
+        }
+        if ($egs_invoice_type == 11 || $egs_invoice_type == 10) {
+            $types[] = [
+                'name' => 'STANDARD INVOICE',
+                'bill_type' => InvoiceTypeCode::INVOICE,
+                'invoice_type' => InvoiceTypeCode::TAX_INVOICE,
+            ];
+            $types[] = [
+                'name' => 'STANDARD INVOICE DEBIT NOTE',
+                'bill_type' => InvoiceTypeCode::DEBIT_NOTE,
+                'invoice_type' => InvoiceTypeCode::TAX_INVOICE,
+            ];
+            $types[] = [
+                'name' => 'STANDARD INVOICE CREDIT NOTE',
+                'bill_type' => InvoiceTypeCode::CREDIT_NOTE,
+                'invoice_type' => InvoiceTypeCode::TAX_INVOICE,
+            ];
+
+        }
+
+        foreach ($types as $type) {
+            $uuid = Str::uuid();
+            $invoice_data['uuid'] = $uuid;
+            $invoice_data['bill_type'] = $type['bill_type'];
+            $invoice_data['invoice_type'] = $type['invoice_type'];
+
+            $signed_invoice = $EInvoice->GenrateInvoice($invoice_data, $compliance_request['issued_certificate']);
+            $validator = $egs->checkInvoiceCompliance($signed_invoice, $uuid);
+
+            if ($validator['error']) {
+                $compliance_result['failed'][] = ['type' => $type['name'], 'errorMessages' => $validator['info']['validationResults']['errorMessages']];
+            } else {
+                $compliance_result['passed'][] = ['type' => $type['name'], 'errorMessages' => $validator['info']['validationResults']['errorMessages'], 'warningMessages' => $validator['info']['validationResults']['warningMessages']];
+            }
+        }
+
+        return $compliance_result;
+    }
+
+    private function get_egs_data_and_validate($uuid)
+    {
+        $store_data = Configuration::find(['company_name', 'egs_invoice_type', 'egs_branch_name', 'egs_common_name', 'egs_branch_industry', 'vat_number', 'egs_street', 'egs_building_number', 'egs_city'])->pluck('value', 'key');
+        if (empty($store_data['egs_building_number'])) {
+            throw new Error("Missing egs building number status.");
+        } else if (empty($store_data['egs_street'])) {
+            throw new Error("Missing egs Street Number.");
+        } else if (empty($store_data['egs_city'])) {
+            throw new Error("Missing egs City.");
+        } else if (empty($store_data['vat_number'])) {
+            throw new Error("Missing egs VAT NUMBER.");
+        } else if (empty($store_data['egs_branch_industry'])) {
+            throw new Error("Missing egs Branch Industry Type.");
+        } else if (empty($store_data['egs_common_name'])) {
+            throw new Error("Missing egs Common Name.");
+        } else if (empty($store_data['egs_branch_name'])) {
+            throw new Error("Missing egs Branch Name.");
+        } else if (empty($store_data['egs_invoice_type'])) {
+            throw new Error("Missing egs Invoice Type.");
+        } else if (empty($store_data['company_name'])) {
+            throw new Error("Missing egs Company Name.");
+        }
+
+        $is_production = env("PRODUCTION") == 1 ? "ZATCA-Code-Signing" : "TSTZATCA-Code-Signing";
+        $egs_serial_number = "1-" . env('EGS_SOLUTION_NAME') . "|2-" . env('EGS_MODEL') . "|3-" . $uuid;
+        $egs_branch_location = "{$store_data['egs_building_number']} {$store_data['egs_street']}, {$store_data['egs_city']}";
+        $egs_vat_number = $store_data['vat_number'];
+        $egs_branch_industry = $store_data['egs_branch_industry'];
+        $egs_custom_id = $store_data['egs_common_name'];
+        $egs_branch_name = $store_data['egs_branch_name'];
+        $egs_invoice_type = $store_data['egs_invoice_type'];
+        $egs_vat_name = $store_data['company_name'];
+
+        return [
+            "uuid" => $uuid,
+            "private_key_pass" => '',
+            "is_production" => $is_production,
+            "egs_serial_number" => $egs_serial_number,
+            "egs_branch_location" => $egs_branch_location,
+            "egs_vat_number" => $egs_vat_number,
+            "egs_branch_industry" => $egs_branch_industry,
+            "egs_custom_id" => $egs_custom_id,
+            "egs_branch_name" => $egs_branch_name,
+            "egs_invoice_type" => $egs_invoice_type,
+            "egs_vat_name" => $egs_vat_name,
+        ];
+
     }
 }

@@ -83,19 +83,33 @@ class LoginController extends Controller
 
     public function getAllStores()
     {
-        $stores = StockLocation::all('location_id', 'location_name_en', 'location_name_ar');
-        return response()->json([
-            'status' => 200,
-            'stores' => $stores,
-        ], 200);
+        try {
+            $stores = StockLocation::all('location_id', 'location_name_en', 'location_name_ar');
+            return response()->json([
+                'status' => 200,
+                'stores' => $stores,
+            ], 200);
+        } catch (\Exception$e) {
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage(),
+            ], 200);
+        }
     }
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
-        return response()->json([
-            'status' => 200,
-            'message' => 'logout successfully',
-        ], 200);
+        try {
+            $request->user()->currentAccessToken()->delete();
+            return response()->json([
+                'status' => 200,
+                'message' => 'logout successfully',
+            ], 200);
+        } catch (\Exception$e) {
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage(),
+            ], 200);
+        }
     }
 }

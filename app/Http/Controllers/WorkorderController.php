@@ -29,6 +29,7 @@ class WorkorderController extends Controller
                 'tax' => $payment_info['tax'],
                 'total' => $payment_info['total'],
                 'status' => 0,
+                'location_id' => $store_id,
             ]);
 
             if ($work_order->workorder_id) {

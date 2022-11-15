@@ -131,9 +131,8 @@ class AccountHeadController extends Controller
         }
     }
 
-    public function validate_account_head(Request $request)
+    public function validate_account_head($account_id)
     {
-        $account_id = $request->input("account_id");
         try {
             $item = AccountHead::find($account_id);
             if ($item) {

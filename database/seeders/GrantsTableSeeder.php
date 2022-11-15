@@ -55,6 +55,8 @@ class GrantsTableSeeder extends Seeder
                 'employee_id' => 1],
             ['permission_id' => 'credit_sales_return',
                 'employee_id' => 1],
+            ['permission_id' => 'e_invoice',
+                'employee_id' => 1],
             ['permission_id' => 'quotation',
                 'employee_id' => 1],
             ['permission_id' => 'workorder',

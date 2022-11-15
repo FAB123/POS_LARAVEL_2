@@ -23,4 +23,9 @@ class SalesItem extends Model
     {
         return $this->hasMany(SalesItemsTaxes::class, 'item_id', 'item_id');
     }
+
+    public function sale()
+    {
+        return $this->belongsTo(Sale::class, 'sale_id', 'sale_id');
+    }
 }

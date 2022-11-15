@@ -25,6 +25,8 @@ class CreateQuotationsTable extends Migration
             $table->double('total', 15, 3);
             $table->string('comments', 255)->nullable();
             $table->boolean('status');
+            $table->unsignedBigInteger('location_id')->index();
+            $table->foreign('location_id')->references('location_id')->on('stock_locations');
             $table->timestamps();
         });
     }

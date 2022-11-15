@@ -10,4 +10,5 @@ class Purchase extends Model
     use HasFactory;
     protected $guarded = [];
     protected $primaryKey = 'purchase_id';
+
 }

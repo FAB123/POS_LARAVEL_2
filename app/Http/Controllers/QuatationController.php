@@ -30,6 +30,7 @@ class QuatationController extends Controller
                 'tax' => $payment_info['tax'],
                 'total' => $payment_info['total'],
                 'status' => 0,
+                'location_id' => $store_id,
             ]);
 
             if ($quotation->quotation_id) {
@@ -70,18 +71,18 @@ class QuatationController extends Controller
                 return response()->json([
                     'status' => true,
                     'invoice_data' => $this->fetch_quatation($quotation->quotation_id),
-                    'message' => "sales.new_customer_or_update",
+                    'message' => "sales.new_quotation_or_update",
                 ], 200);
             }
-            return response()->json([
-                'status' => false,
-                'message' => "sales.new_customer_or_update",
-            ], 200);
+            // return response()->json([
+            //     'status' => false,
+            //     'message' => "sales.new_quotation_or_update",
+            // ], 200);
         } catch (\Exception$e) {
             DB::rollBack();
             return response()->json([
                 'status' => false,
-                'message' => "sales.error_new_or_update",
+                'message' => "sales.error_quotation_new_or_update",
                 'info' => $e->getMessage(),
             ], 200);
         }
@@ -166,9 +167,8 @@ class QuatationController extends Controller
     }
 
     //get Quatation Details
-    public function get_quatation_details(Request $request)
+    public function get_quatation_details(Request $request, $quatation_id)
     {
-        $quatation_id = $request->input('id');
         if ($quatation_id) {
             $location_id = $request->header('Store');
             //update quatation status
@@ -181,7 +181,7 @@ class QuatationController extends Controller
                 ->where('quotation_id', $quatation_id)
                 ->get();
             $new_item = $items->map(function ($item) use ($location_id) {
-                $item_taxs = ItemsTax::find($item->item_id)->get();
+                $item_taxs = ItemsTax::where('item_id', $item->item_id)->get();
                 $sub_total = $item->item_sub_total;
                 $total = 0;
                 $total_percent = 0;
